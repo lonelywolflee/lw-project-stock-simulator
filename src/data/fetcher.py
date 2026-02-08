@@ -27,9 +27,13 @@ def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
             time.sleep(delay)
 
 
-def fetch_stock_listing() -> pd.DataFrame:
-    """KOSPI 상장 종목 목록을 반환한다."""
-    return _retry(fdr.StockListing, "KOSPI")
+def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
+    """상장 종목 목록을 반환한다.
+
+    Args:
+        market: "KOSPI" 또는 "NASDAQ"
+    """
+    return _retry(fdr.StockListing, market)
 
 
 def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
@@ -70,4 +74,28 @@ def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
     df = _retry(fdr.DataReader, "KS11", start, end)
     if df is not None and not df.empty:
         save_to_cache("KS11", start, end, df)
+    return df
+
+
+def fetch_nasdaq_index(start: str, end: str) -> pd.DataFrame:
+    """NASDAQ Composite(IXIC) 지수 데이터를 반환한다."""
+    cached = load_from_cache("IXIC", start, end)
+    if cached is not None:
+        return cached
+
+    df = _retry(fdr.DataReader, "IXIC", start, end)
+    if df is not None and not df.empty:
+        save_to_cache("IXIC", start, end, df)
+    return df
+
+
+def fetch_exchange_rate(start: str, end: str) -> pd.DataFrame:
+    """USD/KRW 일별 환율 데이터를 반환한다."""
+    cached = load_from_cache("USD_KRW", start, end)
+    if cached is not None:
+        return cached
+
+    df = _retry(fdr.DataReader, "USD/KRW", start, end)
+    if df is not None and not df.empty:
+        save_to_cache("USD_KRW", start, end, df)
     return df
