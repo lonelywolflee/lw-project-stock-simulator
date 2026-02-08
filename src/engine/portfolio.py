@@ -16,6 +16,7 @@ class Trade:
     amount: float
     fee: float
     profit: float = 0.0  # 매도 시 실현 손익
+    market: str = "KOSPI"  # "KOSPI" or "NASDAQ"
 
 
 @dataclass
