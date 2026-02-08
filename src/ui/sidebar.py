@@ -32,6 +32,14 @@ def render_sidebar() -> BacktestParams | None:
         value=0.015, step=0.001, format="%.3f",
     )
 
+    st.sidebar.header("시장 설정")
+
+    kospi_ratio = st.sidebar.slider(
+        "국내(KOSPI) 비율", min_value=0, max_value=100, value=50, step=5,
+        help="나머지는 미국(NASDAQ)에 배분됩니다",
+    )
+    st.sidebar.caption(f"NASDAQ: {100 - kospi_ratio}%")
+
     st.sidebar.header("전략 설정")
 
     n_rise_days = st.sidebar.slider("연속 상승일 (n)", min_value=2, max_value=10, value=3)
@@ -72,6 +80,7 @@ def render_sidebar() -> BacktestParams | None:
             max_buy_amount=float(max_buy_amount),
             min_balance=float(min_balance),
             sort_method=sort_method,
+            kospi_ratio=int(kospi_ratio),
         )
 
     return None

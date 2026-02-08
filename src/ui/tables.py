@@ -8,7 +8,7 @@ from src.engine.backtest import BacktestResult
 
 def render_metrics(result: BacktestResult) -> None:
     """핵심 지표를 st.metric 카드로 렌더링한다."""
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         st.metric(
@@ -30,6 +30,11 @@ def render_metrics(result: BacktestResult) -> None:
             label="승률",
             value=f"{result.win_rate_pct:.1f}%",
         )
+    with col5:
+        st.metric(
+            label="총 수수료",
+            value=f"{result.total_fee:,.0f}원",
+        )
 
 
 def render_trade_table(result: BacktestResult) -> None:
@@ -40,16 +45,19 @@ def render_trade_table(result: BacktestResult) -> None:
 
     records = []
     for t in result.trades:
+        is_nasdaq = t.market == "NASDAQ"
+        currency_fmt = "${:,.2f}" if is_nasdaq else "{:,.0f}"
         records.append({
+            "시장": t.market,
             "날짜": t.date,
             "종목코드": t.code,
             "종목명": t.name,
             "구분": t.side,
-            "단가": f"{t.price:,.0f}",
+            "단가": currency_fmt.format(t.price),
             "수량": t.quantity,
-            "금액": f"{t.amount:,.0f}",
-            "수수료": f"{t.fee:,.0f}",
-            "실현손익": f"{t.profit:+,.0f}" if t.side == "SELL" else "-",
+            "금액": currency_fmt.format(t.amount),
+            "수수료": currency_fmt.format(t.fee),
+            "실현손익": currency_fmt.format(t.profit) if t.side == "SELL" else "-",
         })
 
     df = pd.DataFrame(records)

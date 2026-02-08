@@ -82,6 +82,20 @@ def render_comparison_chart(result: BacktestResult) -> None:
             line=dict(width=2, color="rgb(104, 157, 106)", dash="dash"),
         ))
 
+    if result.nasdaq_index is not None and not result.nasdaq_index.empty:
+        nasdaq = result.nasdaq_index
+        nasdaq_close = nasdaq["Close"]
+
+        nasdaq_dates = [d.strftime("%Y-%m-%d") for d in nasdaq_close.index]
+        nasdaq_base = nasdaq_close.iloc[0] if nasdaq_close.iloc[0] != 0 else 1
+        nasdaq_normalized = (nasdaq_close / nasdaq_base * 100).tolist()
+
+        fig.add_trace(go.Scatter(
+            x=nasdaq_dates, y=nasdaq_normalized, name="NASDAQ",
+            mode="lines",
+            line=dict(width=2, color="rgb(177, 98, 134)", dash="dash"),
+        ))
+
     fig.add_hline(y=100, line_dash="dot", line_color="gray", opacity=0.5)
 
     fig.update_layout(
