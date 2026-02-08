@@ -1,0 +1,23 @@
+[project]
+name = "stock-simulator"
+version = "0.1.0"
+description = "KOSPI algorithm trading simulator with backtesting engine and Streamlit UI"
+requires-python = ">=3.12"
+dependencies = [
+    "finance-datareader",
+    "pandas",
+    "numpy",
+    "streamlit",
+    "plotly",
+    "pyarrow",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
