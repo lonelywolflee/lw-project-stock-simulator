@@ -4,7 +4,7 @@
 본 프로젝트는 **Python 3.14** 환경에서 **FinanceDataReader** 라이브러리를 활용하여 대한민국 코스피(KOSPI) 시장의 과거 데이터를 분석하고, 특정 알고리즘 기반의 매매 전략을 테스트하는 **로컬 기반 증권 거래 시뮬레이터**입니다.
 
 ## 2. 기술 스택
-* **Language:** Python 3.14+ (Faster CPython 및 최신 문법 활용)
+* **Language:** Python 3.14+ (Faster CPython 및 최신 문법 활용, package 관리는 uv 사용)
 * **Library:** * `FinanceDataReader`: 주가 및 시가총액 데이터 수집
     * `Pandas`, `NumPy`: 데이터 분석 및 시뮬레이션 로직
     * `Streamlit`: 인터랙티브 웹 UI 구성
