@@ -30,12 +30,15 @@ src/engine/   → 시그널 감지, 포트폴리오 관리, 백테스트 엔진 
 src/ui/       → Streamlit 프레젠테이션 (sidebar, charts, tables)
 ```
 
-### Core Design Decisions
+## Rules Structure
 
-- **시그널은 사전 계산**: `signals.py`의 함수들은 `pd.Series → pd.Series` 순수 함수. 백테스트 루프 진입 전에 모든 종목의 시그널을 한 번에 계산한다.
-- **일별 루프 순서**: SELL → BUY → SNAPSHOT. 매도가 먼저 실행되어 확보된 현금으로 같은 날 매수 가능.
-- **이중 시장 모델**: `run_backtest()`는 시장에 무관한 순수 시뮬레이션 함수. `run_dual_market_backtest()`가 자본 분할 → 독립 실행 → 환율 기반 합산을 오케스트레이팅한다. NASDAQ 포트폴리오는 USD 기준으로 운영되며, 합산 시 일별 USD/KRW 환율로 KRW 환산.
-- **가격 데이터**: `dict[str, pd.DataFrame]` (종목코드 → OHLCV DataFrame, DatetimeIndex).
+각 레이어의 상세 개발 가이드는 `.claude/rules/` 하위에 분리되어 있다:
+
+| 파일 | 대상 레이어 | 주요 내용 |
+|------|------------|-----------|
+| `.claude/rules/data.md` | `src/data/` | FinanceDataReader 래퍼, Parquet 캐시, 가격 데이터 형식 |
+| `.claude/rules/engine.md` | `src/engine/` | 시그널 사전 계산, 일별 루프 순서, 이중 시장 모델, 매매 알고리즘 |
+| `.claude/rules/ui.md` | `src/ui/` | Streamlit 오케스트레이션, 사이드바, Plotly 차트, 테이블 |
 
 ### Commit Convention
 
