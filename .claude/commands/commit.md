@@ -1,3 +1,10 @@
+---
+context: fork
+agent: commiter
+model: haiku
+allowed-tools: Bash, Read, Grep, Glob
+---
+
 현재 스테이징되지 않은 변경사항을 분석하고, 단일 목적별로 분리하여 커밋해주세요.
 
 ## 규칙
