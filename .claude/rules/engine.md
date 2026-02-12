@@ -1,4 +1,4 @@
-# src/engine/ 레이어 개발 가이드
+# backend/core/engine/ 레이어 개발 가이드
 
 ## 역할
 

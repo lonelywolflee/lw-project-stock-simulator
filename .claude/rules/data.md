@@ -1,4 +1,4 @@
-# src/data/ 레이어 개발 가이드
+# backend/core/data/ 레이어 개발 가이드
 
 ## 역할
 
