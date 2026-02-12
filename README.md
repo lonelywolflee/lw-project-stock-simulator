@@ -5,18 +5,14 @@ FinanceDataReader로 KOSPI/NASDAQ 과거 데이터를 수집하고, 시그널 �
 ## 기술 스택
 
 ### Backend
-- **Django 5.1** + **django-ninja 1.3** — REST API
-- **Celery 5.4** + **Redis** — 비동기 백테스트 실행
-- **Supabase** (PostgreSQL) — 데이터베이스
-- **django-unfold** — 관리자 대시보드
+- **Django** + **django-ninja** — REST API (동기 실행, 외부 인프라 불필요)
 - **FinanceDataReader** — 주가, 지수, 환율 데이터 수집
 - **Pandas / NumPy** — 데이터 분석 및 시뮬레이션 로직
 
 ### Frontend
-- **React 18** + **TypeScript** + **Vite** — SPA
+- **React 19** + **TypeScript** + **Vite** — SPA
 - **shadcn/ui** + **Tailwind CSS v4** — 컴포넌트 라이브러리
 - **TanStack Query v5** — 서버 상태 관리
-- **Zustand** — 클라이언트 상태 관리
 - **Recharts** — 차트 시각화
 
 ## 주요 기능
@@ -40,18 +36,12 @@ FinanceDataReader로 KOSPI/NASDAQ 과거 데이터를 수집하고, 시그널 �
 
 ```bash
 # Backend
-cd backend
-uv pip install -e ".[dev]"
-python manage.py migrate
-python manage.py runserver
+cp backend/.env.example backend/.env  # 필요 시 값 수정
+cd backend && uv sync
+uv run python manage.py runserver
 
-# Celery worker (별도 터미널)
-cd backend
-celery -A config worker -l info
-
-# Frontend
-cd frontend
-npm install
+# Frontend (별도 터미널)
+cd frontend && npm install
 npm run dev
 
 # Docker (전체 스택)
@@ -61,17 +51,16 @@ docker compose up
 ## 테스트
 
 ```bash
-cd backend
-uv run pytest tests/ -v
+cd backend && uv run pytest tests/ -v
 ```
 
 ## 프로젝트 구조
 
 ```
 backend/
-├── config/         # Django 설정 (settings, urls, celery)
+├── config/         # Django 설정 (settings, urls)
 ├── apps/
-│   ├── backtests/  # 백테스트 API, 모델, Celery 태스크
+│   ├── backtests/  # 백테스트 API, 스키마, 직렬화
 │   └── market_data/ # 종목 데이터 API
 ├── core/
 │   ├── engine/     # 시그널 감지, 포트폴리오, 백테스트 엔진 (순수 로직)
@@ -82,7 +71,6 @@ frontend/
 ├── src/
 │   ├── api/        # Axios 클라이언트 + TypeScript 타입
 │   ├── hooks/      # TanStack Query 커스텀 훅
-│   ├── stores/     # Zustand 상태 관리
 │   ├── components/ # 재사용 UI 컴포넌트 (폼, 차트, 테이블, 메트릭)
 │   ├── features/   # 페이지 단위 컴포넌트 (BacktestDashboard)
 │   └── utils/      # 포매터, 색상 유틸리티
