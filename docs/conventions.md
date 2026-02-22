@@ -26,7 +26,7 @@
 
 - NASDAQ 종목 목록의 코드 컬럼은 `"Symbol"` (KOSPI는 `"Code"`) — 매핑 시 주의
 - 대규모 백테스트(이중 시장, 장기간) 시 HTTP 요청이 수 분 소요될 수 있음 — Production 배포 시 gunicorn `--timeout 600` 필요
-- `apps/*/models.py`와 `apps/*/admin.py`는 빈 파일 — DB 모델/Admin 미사용. 마이그레이션, `makemigrations` 불필요
+- DB 모델/Admin 미사용 — `models.py`, `admin.py`, `migrations/` 없음. `makemigrations` 불필요
 - `frontend/src/stores/` 디렉토리 없음 — Zustand 제거됨. 클라이언트 상태는 TanStack Query `useMutation` 하나로 관리 (별도 클라이언트 상태 없음)
 - `core/data/fetcher.py`의 모든 네트워크 요청은 `_retry()` 지수 백오프(최대 3회)를 거친다 — 직접 FinanceDataReader 호출 금지
 
