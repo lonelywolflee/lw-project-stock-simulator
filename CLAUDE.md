@@ -6,7 +6,7 @@
 
 | 문서 | 내용 |
 |------|------|
-| [`docs/01-architecture.md`](docs/01-architecture.md) | 아키텍처, 기술 스택, 프로젝트 구조, 주요 파일, 모듈 API |
+| [`docs/01-architecture.md`](docs/01-architecture.md) | 아키텍처, 설계 원칙, 기술 스택, 데이터 흐름, 프로젝트 구조, 모듈 요약, 인프라 |
 | [`docs/02-development.md`](docs/02-development.md) | 환경 설정, 실행 방법, 명령어 레퍼런스, 의존성 관리 |
 | [`docs/03-conventions.md`](docs/03-conventions.md) | 코딩 규칙, Import 규칙, UI 컨벤션, 주의사항(Gotchas) |
 | [`docs/04-testing.md`](docs/04-testing.md) | 테스트 전략, 실행 방법, 테스트 데이터 헬퍼 |

@@ -253,7 +253,6 @@ lw-project-stock-simulator/
 └── .gitignore                        # Git 제외 규칙
 ```
 
-
 ## Modules
 
 ### Backend Modules
