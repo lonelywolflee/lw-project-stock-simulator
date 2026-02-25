@@ -34,6 +34,7 @@
   → Frontend: 폼 검증 → API 호출
     → Backend: 시장 데이터 수집/캐싱
       → Engine: 시그널 사전 계산 → 일별 매매 시뮬레이션 (SELL → BUY → SNAPSHOT)
+               (이중 시장 시: 자본 분할 → KOSPI·NASDAQ 독립 시뮬레이션 → 환율 환산 합산)
     → Backend: 지표 계산 (수익률, MDD, 승률, 수수료) → 결과 응답
   → Frontend: 차트 · 지표 · 거래 내역 렌더링
 ```
