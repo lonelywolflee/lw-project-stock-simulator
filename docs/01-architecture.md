@@ -85,17 +85,17 @@
 ### 백테스트 실행 흐름
 
 ```
-┌──────────────────┐    POST /api/backtests/run    ┌──────────────────┐
+┌──────────────────┐    POST /api/backtests/run     ┌──────────────────┐
 │  Frontend        │ ────────────────────────────→  │  Backend API     │
 │                  │                                │                  │
 │  useRunBacktest()│                                │  api.py: run()   │
 │  → runBacktest() │                                │                  │
 │  (Axios POST)    │  ←──────────────────────────── │  serialize_result│
-│                  │    JSON: BacktestResultSchema   │  ()              │
+│                  │    JSON: BacktestResultSchema  │  ()              │
 └──────────────────┘                                └────────┬─────────┘
                                                              │
                                           ┌──────────────────┼──────────────────┐
-                                          │ 1. 데이터 로딩    │                  │
+                                          │ 1. 데이터 로딩      │                  │
                                           ▼                  ▼                  ▼
                                 ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
                                 │ fetch_stock  │  │ fetch_all    │  │ fetch_kospi_index │
@@ -203,7 +203,55 @@ api.run()
 
 ## Project Structure
 
-
+```
+lw-project-stock-simulator/
+├── backend/                          # Django 백엔드 서비스
+│   ├── apps/                         # Django 앱 모음
+│   │   ├── backtests/                # 백테스트 API (api.py, schemas.py, serializers.py)
+│   │   └── market_data/              # 시장 데이터 API (api.py, schemas.py)
+│   ├── config/                       # Django 프로젝트 설정
+│   │   ├── settings/                 # 환경별 설정 (base.py)
+│   │   ├── urls.py                   # URL 라우팅
+│   │   └── wsgi.py                   # WSGI 엔트리포인트
+│   ├── core/                         # 핵심 비즈니스 로직 (Django 비의존)
+│   │   ├── data/                     # 데이터 수집·캐싱 (fetcher.py, cache.py)
+│   │   └── engine/                   # 매매 엔진 (backtest.py, portfolio.py, signals.py)
+│   ├── tests/                        # 백엔드 테스트
+│   ├── manage.py                     # Django CLI
+│   ├── pyproject.toml                # Python 의존성·프로젝트 메타데이터
+│   ├── Dockerfile                    # 백엔드 컨테이너 이미지
+│   └── .env.example                  # 환경 변수 템플릿
+├── frontend/                         # React 프론트엔드 서비스
+│   ├── src/
+│   │   ├── api/                      # API 클라이언트·타입 정의 (client.ts, types.ts)
+│   │   ├── components/               # 공유 UI 컴포넌트
+│   │   │   ├── ui/                   # shadcn/ui 기본 컴포넌트
+│   │   │   ├── charts/               # 차트 컴포넌트
+│   │   │   ├── forms/                # 폼 컴포넌트
+│   │   │   ├── metrics/              # 지표 카드 컴포넌트
+│   │   │   └── tables/               # 테이블 컴포넌트
+│   │   ├── features/                 # 기능별 페이지 컴포넌트
+│   │   │   └── backtest/             # 백테스트 대시보드·결과 화면
+│   │   ├── hooks/                    # 커스텀 훅 (useBacktest.ts)
+│   │   ├── lib/                      # 유틸리티 라이브러리 (utils.ts)
+│   │   ├── utils/                    # 포매터·색상 유틸 (formatters.ts, colors.ts)
+│   │   ├── App.tsx                   # 루트 컴포넌트
+│   │   ├── main.tsx                  # 앱 엔트리포인트
+│   │   └── index.css                 # 글로벌 스타일 (Tailwind)
+│   ├── public/                       # 정적 에셋
+│   ├── index.html                    # HTML 엔트리포인트
+│   ├── vite.config.ts                # Vite 빌드 설정
+│   ├── tsconfig.json                 # TypeScript 루트 설정
+│   ├── eslint.config.js              # ESLint 설정
+│   ├── components.json               # shadcn/ui 설정
+│   ├── package.json                  # Node.js 의존성
+│   └── Dockerfile                    # 프론트엔드 컨테이너 이미지
+├── docs/                             # 프로젝트 문서
+├── docker-compose.yml                # 로컬 개발 환경 오케스트레이션
+├── CLAUDE.md                         # Claude Code 진입점 (문서 목차)
+├── README.md                         # 프로젝트 소개
+└── .gitignore                        # Git 제외 규칙
+```
 
 
 ## Modules
