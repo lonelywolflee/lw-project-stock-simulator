@@ -258,6 +258,28 @@ lw-project-stock-simulator/
 
 ### Backend Modules
 
+| 모듈 | 역할 |
+|------|------|
+| `core/engine/backtest.py` | 일별 루프 기반 백테스트 시뮬레이션 실행 및 단일/이중 시장 결과·지표 산출 |
+| `core/engine/signals.py` | 종가 시리즈로부터 연속 상승·연속 하락·급락 매매 시그널을 감지하는 순수 함수 |
+| `core/engine/portfolio.py` | 현금·보유종목·거래내역·일별 스냅샷 등 포트폴리오 상태 관리 및 매수·매도 실행 |
+| `core/data/fetcher.py` | FinanceDataReader를 래핑하여 종목 가격·지수·환율 데이터를 수집하고 캐시를 우선 조회 |
+| `core/data/cache.py` | 종목코드·기간 기반 키로 DataFrame을 Parquet 파일로 저장·로드하는 로컬 캐시 |
+| `apps/backtests/api.py` | 백테스트 실행 POST 엔드포인트 — 데이터 수집·엔진 실행·결과 직렬화를 오케스트레이션 |
+| `apps/backtests/schemas.py` | 백테스트 API 요청 파라미터와 응답 결과의 Pydantic(ninja) 스키마 정의 |
+| `apps/backtests/serializers.py` | BacktestResult 데이터클래스를 JSON 직렬화 가능한 dict로 변환 |
+| `apps/market_data/api.py` | 상장 종목 목록 조회 GET 엔드포인트 (KOSPI·NASDAQ 시가총액 포함) |
+| `apps/market_data/schemas.py` | 종목 목록 응답의 Pydantic(ninja) 스키마 정의 |
 
 ### Frontend Modules
+
+| 모듈 | 역할 |
+|------|------|
+| `api/client.ts` | Axios 인스턴스 생성 및 백테스트 실행 API 호출 함수 제공 |
+| `api/types.ts` | 백테스트 요청·응답·거래·스냅샷·지수 등 API 타입 정의 |
+| `features/backtest/BacktestDashboard.tsx` | 파라미터 폼과 결과 영역을 배치하는 백테스트 메인 레이아웃 컴포넌트 |
+| `features/backtest/BacktestResults.tsx` | 지표 카드·자산 추이 차트·벤치마크 비교·거래 내역 탭을 구성하는 결과 표시 컴포넌트 |
+| `hooks/useBacktest.ts` | TanStack Query의 useMutation으로 백테스트 API 호출 상태를 관리하는 커스텀 훅 |
+| `utils/formatters.ts` | KRW·USD 통화, 퍼센트, 날짜, 실행 시간 등 숫자·문자열 포매터 유틸리티 |
+| `utils/colors.ts` | 한국 금융 컨벤션(상승 빨강·하락 파랑) 기반 차트·테이블 색상 상수 및 헬퍼 함수 |
 
