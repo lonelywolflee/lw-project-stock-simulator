@@ -16,7 +16,29 @@
 
 ## Core Features & Workflows
 
+### 핵심 기능
 
+| 기능 | 설명 |
+|------|------|
+| 백테스트 시뮬레이션 | 파라미터 기반 추세 매매 전략 백테스트 실행 |
+| 결과 시각화 | 자산 변동 차트, 벤치마크 비교, 거래 내역 테이블, 핵심 지표 카드 (수익률 · MDD · 승률 · 수수료) |
+| 시장 데이터 수집 | KOSPI · NASDAQ 종목의 과거 OHLCV 데이터 수집 및 Parquet 캐싱 |
+| 종목 목록 조회 | KOSPI · NASDAQ 상장 종목 목록 조회 API (시가총액 포함) |
+| 이중 시장 지원 | KOSPI/NASDAQ 비율 분할 투자 + USD/KRW 환율 환산 |
+| 실거래 연동 | 한국투자증권 API를 통한 실제 매매 실행 (예정) |
+
+### 주요 워크플로우
+
+```
+사용자: 파라미터 입력 (기간, 자금, 전략 설정)
+  → Frontend: 폼 검증 → API 호출
+    → Backend: 시장 데이터 수집/캐싱
+      → Engine: 시그널 사전 계산 → 일별 매매 시뮬레이션 (SELL → BUY → SNAPSHOT)
+    → Backend: 지표 계산 (수익률, MDD, 승률, 수수료) → 결과 응답
+  → Frontend: 차트 · 지표 · 거래 내역 렌더링
+```
+
+매매 알고리즘 상세는 [algorithm.md](./05-algorithm.md)를 참고한다.
 
 ## Technology Stack
 
