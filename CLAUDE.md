@@ -6,12 +6,12 @@
 
 | 문서 | 내용 |
 |------|------|
-| [`docs/architecture.md`](docs/architecture.md) | 아키텍처, 기술 스택, 프로젝트 구조, 주요 파일, 모듈 API |
-| [`docs/development.md`](docs/development.md) | 환경 설정, 실행 방법, 명령어 레퍼런스, 의존성 관리 |
-| [`docs/conventions.md`](docs/conventions.md) | 코딩 규칙, Import 규칙, UI 컨벤션, 주의사항(Gotchas) |
-| [`docs/testing.md`](docs/testing.md) | 테스트 전략, 실행 방법, 테스트 데이터 헬퍼 |
-| [`docs/algorithm.md`](docs/algorithm.md) | 매매 알고리즘 상세 명세 (입력/출력, 이중 시장 모델) |
-| [`docs/prd-v0.1.0.md`](docs/prd-v0.1.0.md) | v0.1.0 원본 기획서 (역사적 기록, 수정 금지) |
+| [`docs/01-architecture.md`](docs/01-architecture.md) | 아키텍처, 기술 스택, 프로젝트 구조, 주요 파일, 모듈 API |
+| [`docs/02-development.md`](docs/02-development.md) | 환경 설정, 실행 방법, 명령어 레퍼런스, 의존성 관리 |
+| [`docs/03-conventions.md`](docs/03-conventions.md) | 코딩 규칙, Import 규칙, UI 컨벤션, 주의사항(Gotchas) |
+| [`docs/04-testing.md`](docs/04-testing.md) | 테스트 전략, 실행 방법, 테스트 데이터 헬퍼 |
+| [`docs/05-algorithm.md`](docs/05-algorithm.md) | 매매 알고리즘 상세 명세 (입력/출력, 이중 시장 모델) |
+| [`docs/06-prd-v0.1.0.md`](docs/06-prd-v0.1.0.md) | v0.1.0 원본 기획서 (역사적 기록, 수정 금지) |
 
 ## 문서 관리 규칙
 
