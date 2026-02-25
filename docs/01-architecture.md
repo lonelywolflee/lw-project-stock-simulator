@@ -43,7 +43,42 @@
 
 ## Technology Stack
 
+### Backend
 
+| 기술 | 버전 | 용도 |
+|------|------|------|
+| Python | 3.12+ | 런타임 |
+| Django | 5.1 | 웹 프레임워크 |
+| django-ninja | 1.3 | REST API (FastAPI 스타일) |
+| django-cors-headers | 4.4 | CORS 정책 관리 |
+| FinanceDataReader | latest | 주가 · 시가총액 데이터 수집 |
+| Pandas / NumPy | latest | 데이터 분석, 시뮬레이션 연산 |
+| PyArrow | latest | 고속 데이터 캐싱 (Parquet) |
+| python-dotenv | 1.0 | 환경 변수 관리 |
+| uv | latest | 패키지 · 프로젝트 관리 |
+
+### Frontend
+
+| 기술 | 버전 | 용도 |
+|------|------|------|
+| React | 19 | UI 라이브러리 |
+| TypeScript | 5.9 | 타입 안전성 |
+| Vite | 7 | 빌드 · 개발 서버 |
+| TailwindCSS | 4 | 유틸리티 기반 스타일링 |
+| shadcn/ui + Radix UI | latest | UI 컴포넌트 |
+| Recharts | 3 | 차트 시각화 |
+| Lightweight Charts | 5 | 금융 차트 시각화 (캔들스틱) |
+| TanStack Query | 5 | 서버 상태 관리 |
+| Zustand | 5 | 클라이언트 상태 관리 |
+| React Hook Form + Zod | 7 / 4 | 폼 관리 · 유효성 검증 |
+| Axios | 1 | HTTP 클라이언트 |
+
+### Infrastructure
+
+| 기술 | 용도 |
+|------|------|
+| Docker Compose | 로컬 개발 환경 오케스트레이션 |
+| SQLite | 계정 관리, 거래 종목 관리 (예정) |
 
 ## Project Structure
 
