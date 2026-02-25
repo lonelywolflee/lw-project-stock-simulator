@@ -283,3 +283,47 @@ lw-project-stock-simulator/
 | `utils/formatters.ts` | KRW·USD 통화, 퍼센트, 날짜, 실행 시간 등 숫자·문자열 포매터 유틸리티 |
 | `utils/colors.ts` | 한국 금융 컨벤션(상승 빨강·하락 파랑) 기반 차트·테이블 색상 상수 및 헬퍼 함수 |
 
+## Infrastructure & Deployment
+
+### Docker Compose 구성
+
+| 서비스 | 이미지 | 포트 | 역할 |
+|--------|--------|------|------|
+| `backend` | `backend/Dockerfile` (`python:3.12-slim`) | 8000 | Django API 서버 |
+| `frontend` | `frontend/Dockerfile` (`node:20-alpine`) | 5173 | Vite 개발 서버 |
+
+- `frontend`는 `backend`에 의존한다 (`depends_on`)
+- 백엔드 캐시 데이터는 `backend_cache` 볼륨으로 영속화 (`/app/.cache`)
+- 개발 시 소스 바인드 마운트: `backend` → `./backend:/app`, `frontend` → `./frontend/src:/app/src`
+
+### Dockerfile 빌드 과정
+
+**Backend** (`python:3.12-slim`)
+
+1. `build-essential` 설치 (네이티브 확장 빌드용)
+2. `pyproject.toml` 복사 후 `uv pip install --system -e ".[dev]"` 로 의존성 설치
+3. 소스 코드 복사 후 `python manage.py runserver 0.0.0.0:8000` 실행
+
+**Frontend** (`node:20-alpine`)
+
+1. `package.json` · `package-lock.json` 복사 후 `npm ci` 로 의존성 설치
+2. 소스 코드 복사 후 `npm run dev -- --host 0.0.0.0` 실행
+
+### 환경 변수
+
+백엔드 환경 변수는 `backend/.env`로 관리한다. 템플릿: `backend/.env.example`
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `SECRET_KEY` | `your-secret-key-here` | Django 시크릿 키 |
+| `DEBUG` | `True` | Django 디버그 모드 |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | 허용 호스트 목록 |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | CORS 허용 오리진 |
+
+### 포트 매핑
+
+| 서비스 | 호스트 | 컨테이너 |
+|--------|--------|----------|
+| Backend API | `localhost:8000` | `0.0.0.0:8000` |
+| Frontend Dev | `localhost:5173` | `0.0.0.0:5173` |
+
