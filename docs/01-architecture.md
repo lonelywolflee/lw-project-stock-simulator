@@ -80,6 +80,127 @@
 | Docker Compose | 로컬 개발 환경 오케스트레이션 |
 | SQLite | 계정 관리, 거래 종목 관리 (예정) |
 
+## Data Flow
+
+### 백테스트 실행 흐름
+
+```
+┌──────────────────┐    POST /api/backtests/run    ┌──────────────────┐
+│  Frontend        │ ────────────────────────────→  │  Backend API     │
+│                  │                                │                  │
+│  useRunBacktest()│                                │  api.py: run()   │
+│  → runBacktest() │                                │                  │
+│  (Axios POST)    │  ←──────────────────────────── │  serialize_result│
+│                  │    JSON: BacktestResultSchema   │  ()              │
+└──────────────────┘                                └────────┬─────────┘
+                                                             │
+                                          ┌──────────────────┼──────────────────┐
+                                          │ 1. 데이터 로딩    │                  │
+                                          ▼                  ▼                  ▼
+                                ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
+                                │ fetch_stock  │  │ fetch_all    │  │ fetch_kospi_index │
+                                │ _listing()   │  │ _prices()    │  │ fetch_nasdaq_index│
+                                │ 종목 목록     │  │ 전종목 가격   │  │ fetch_exchange    │
+                                │              │  │              │  │ _rate()           │
+                                └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘
+                                       │                 │                   │
+                                       │                 ▼                   │
+                                       │       ┌──────────────────┐          │
+                                       │       │ fetch_price_data │          │
+                                       │       │ (종목별 호출)     │          │
+                                       │       └────────┬─────────┘          │
+                                       │                │                    │
+                                       ▼                ▼                    ▼
+                                ┌───────────────────────────────────────────────┐
+                                │              cache.py                         │
+                                │  load_from_cache() → 히트 시 Parquet 반환     │
+                                │  미스 시 → FinanceDataReader → save_to_cache()│
+                                └───────────────────────────────────────────────┘
+                                                             │
+                                          ┌──────────────────┘
+                                          │ 2. 백테스트 실행
+                                          ▼
+                                ┌──────────────────────────────────────┐
+                                │  backtest.py                         │
+                                │                                      │
+                                │  run_backtest()                      │
+                                │  또는 run_dual_market_backtest()     │
+                                └──────────────────┬───────────────────┘
+                                                   │
+                                    ┌──────────────┼──────────────┐
+                                    ▼              ▼              ▼
+                          ┌──────────────┐  ┌───────────┐  ┌──────────────┐
+                          │ signals.py   │  │ 일별 루프  │  │ portfolio.py │
+                          │              │  │            │  │              │
+                          │ _precompute  │  │ SELL Phase │  │ Portfolio    │
+                          │ _signals()   │  │ BUY Phase  │  │ .buy()      │
+                          │              │  │ SNAPSHOT   │  │ .sell_all() │
+                          │ • 연속상승   │  │            │  │ .snapshot() │
+                          │ • 연속하락   │  │            │  │              │
+                          │ • 긴급매도   │  │            │  │              │
+                          └──────────────┘  └───────────┘  └──────────────┘
+                                                   │
+                                                   ▼
+                                          ┌──────────────────┐
+                                          │ _compute_metrics │
+                                          │ 수익률·MDD·승률  │
+                                          │ ·수수료 계산      │
+                                          └──────────────────┘
+```
+
+### 함수 호출 체인
+
+**단일 시장 (KOSPI 100% 또는 NASDAQ 100%)**
+
+```
+api.run()
+├── fetch_stock_listing(market)
+├── fetch_all_prices(codes, start, end)
+│   └── fetch_price_data(code, start, end)  # 종목별
+│       ├── load_from_cache(code, start, end)
+│       └── fdr.DataReader() → save_to_cache()
+├── fetch_kospi_index() / fetch_nasdaq_index()
+│   ├── load_from_cache()
+│   └── fdr.DataReader() → save_to_cache()
+├── run_backtest(params, price_data, listing_df, index_df)
+│   ├── _precompute_signals(price_data, n, m, y)
+│   │   ├── detect_consecutive_rises(close, n)
+│   │   ├── detect_consecutive_falls(close, m)
+│   │   └── detect_emergency_sell(close, y)
+│   ├── 일별 루프 (trading_dates)
+│   │   ├── SELL: portfolio.sell_all()
+│   │   ├── BUY:  portfolio.buy()
+│   │   └── SNAP: portfolio.snapshot()
+│   └── _compute_metrics(portfolio, initial_cash)
+└── serialize_result(result) → JSON 응답
+```
+
+**이중 시장 (KOSPI + NASDAQ 비율 분할)**
+
+```
+api.run()
+├── fetch_stock_listing("KOSPI") + fetch_stock_listing("NASDAQ")
+├── fetch_all_prices(kospi_codes) + fetch_all_prices(nasdaq_codes)
+├── fetch_kospi_index() + fetch_nasdaq_index() + fetch_exchange_rate()
+├── run_dual_market_backtest(...)
+│   ├── 자본 분할: kospi_cash = initial × ratio, nasdaq_cash_usd = (initial × (1-ratio)) / 환율
+│   ├── run_backtest(kospi_params, kospi_prices, ...)   # KRW 기준
+│   ├── run_backtest(nasdaq_params, nasdaq_prices, ...)  # USD 기준
+│   ├── 일별 합산: NASDAQ 스냅샷 × 당일 환율 → KRW 환산 후 KOSPI와 합산
+│   └── _compute_metrics_from_snapshots(combined, all_trades, initial_cash)
+└── serialize_result(result) → JSON 응답
+```
+
+### 데이터 캐싱
+
+`fetcher.py`의 모든 데이터 수집 함수(`fetch_price_data`, `fetch_kospi_index`, `fetch_nasdaq_index`, `fetch_exchange_rate`)는 `cache.py`를 통해 동일한 캐싱 전략을 사용한다.
+
+- **캐시 키**: `{종목코드}_{시작일}_{종료일}` (예: `005930_2024-01-01_2024-12-31.parquet`)
+- **저장 형식**: Apache Parquet (PyArrow)
+- **저장 위치**: 프로젝트 루트의 `.cache/` 디렉토리
+- **캐시 정책**: 동일 종목·동일 기간 요청 시 캐시 히트, 기간이 다르면 미스 (기간 단위 exact match)
+- **네트워크 장애 대응**: `_retry()` 함수가 지수 백오프(1s → 2s → 4s)로 최대 3회 재시도
+
 ## Project Structure
 
 
