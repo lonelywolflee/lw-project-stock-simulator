@@ -25,7 +25,7 @@ function normalizeToBase100(values: number[]): number[] {
 }
 
 export function ComparisonChart({ result }: ComparisonChartProps) {
-  const { daily_snapshots, kospi_index, nasdaq_index } = result;
+  const { daily_snapshots, kospi_index } = result;
   if (daily_snapshots.length === 0) return null;
 
   // 포트폴리오 정규화 (Base=100)
@@ -37,7 +37,7 @@ export function ComparisonChart({ result }: ComparisonChartProps) {
   // 날짜 기반 데이터 조합
   const dateMap = new Map<
     string,
-    { portfolio: number; kospi?: number; nasdaq?: number }
+    { portfolio: number; kospi?: number }
   >();
 
   daily_snapshots.forEach((s, i) => {
@@ -54,23 +54,11 @@ export function ComparisonChart({ result }: ComparisonChartProps) {
     });
   }
 
-  if (nasdaq_index && nasdaq_index.dates.length === nasdaq_index.values.length) {
-    const nasdaqNorm = normalizeToBase100(nasdaq_index.values);
-    nasdaq_index.dates.forEach((d, i) => {
-      const date = formatDate(d);
-      const entry = dateMap.get(date);
-      if (entry && nasdaqNorm[i] !== undefined) entry.nasdaq = nasdaqNorm[i];
-    });
-  }
-
   const data = Array.from(dateMap.entries()).map(([date, vals]) => ({
     date,
     포트폴리오: Number(vals.portfolio.toFixed(2)),
     ...(vals.kospi !== undefined && {
       KOSPI: Number(vals.kospi.toFixed(2)),
-    }),
-    ...(vals.nasdaq !== undefined && {
-      NASDAQ: Number(vals.nasdaq.toFixed(2)),
     }),
   }));
 
@@ -117,16 +105,6 @@ export function ComparisonChart({ result }: ComparisonChartProps) {
                 type="monotone"
                 dataKey="KOSPI"
                 stroke={CHART_COLORS.kospi}
-                strokeWidth={1.5}
-                strokeDasharray="5 5"
-                dot={false}
-              />
-            )}
-            {nasdaq_index && (
-              <Line
-                type="monotone"
-                dataKey="NASDAQ"
-                stroke={CHART_COLORS.nasdaq}
                 strokeWidth={1.5}
                 strokeDasharray="5 5"
                 dot={false}
