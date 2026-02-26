@@ -9,7 +9,7 @@ from apps.market_data.api import router as market_data_router
 api = NinjaAPI(
     title="Stock Simulator API",
     version="1.0.0",
-    description="KOSPI + NASDAQ 이중 시장 백테스트 시뮬레이터 API",
+    description="KOSPI 백테스트 시뮬레이터 API",
 )
 
 api.add_router("/backtests", backtests_router)

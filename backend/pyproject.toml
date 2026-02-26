@@ -1,7 +1,7 @@
 [project]
 name = "stock-simulator-backend"
 version = "1.0.0"
-description = "KOSPI + NASDAQ algorithmic trading simulator - Django backend"
+description = "KOSPI algorithmic trading simulator - Django backend"
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.1,<6.0",

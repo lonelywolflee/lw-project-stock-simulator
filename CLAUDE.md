@@ -10,7 +10,7 @@
 | [`docs/02-development.md`](docs/02-development.md) | 환경 설정, 실행 방법, 명령어 레퍼런스, 의존성 관리 |
 | [`docs/03-conventions.md`](docs/03-conventions.md) | 코딩 규칙, Import 규칙, UI 컨벤션, 주의사항(Gotchas) |
 | [`docs/04-testing.md`](docs/04-testing.md) | 테스트 전략, 실행 방법, 테스트 데이터 헬퍼 |
-| [`docs/05-algorithm.md`](docs/05-algorithm.md) | 매매 알고리즘 상세 명세 (입력/출력, 이중 시장 모델) |
+| [`docs/05-algorithm.md`](docs/05-algorithm.md) | 매매 알고리즘 상세 명세 (입력/출력) |
 | [`docs/06-prd-v0.1.0.md`](docs/06-prd-v0.1.0.md) | v0.1.0 원본 기획서 (역사적 기록, 수정 금지) |
 
 ## 문서 관리 규칙
