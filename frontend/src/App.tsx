@@ -13,7 +13,7 @@ function App() {
             Stock Simulator
           </h1>
           <span className="text-xs text-muted-foreground">
-            KOSPI + NASDAQ 이중 시장 백테스트
+            KOSPI 백테스트
           </span>
         </div>
       </header>
