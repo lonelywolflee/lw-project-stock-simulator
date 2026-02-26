@@ -29,14 +29,24 @@
 
 ### 주요 워크플로우
 
-```
-사용자: 파라미터 입력 (기간, 자금, 전략 설정)
-  → Frontend: 폼 검증 → API 호출
-    → Backend: 시장 데이터 수집/캐싱
-      → Engine: 시그널 사전 계산 → 일별 매매 시뮬레이션 (SELL → BUY → SNAPSHOT)
-               (이중 시장 시: 자본 분할 → KOSPI·NASDAQ 독립 시뮬레이션 → 환율 환산 합산)
-    → Backend: 지표 계산 (수익률, MDD, 승률, 수수료) → 결과 응답
-  → Frontend: 차트 · 지표 · 거래 내역 렌더링
+```mermaid
+sequenceDiagram
+    actor User as 사용자
+    participant FE as Frontend
+    participant BE as Backend
+    participant Engine as Engine
+
+    User->>FE: 파라미터 입력 (기간, 자금, 전략 설정)
+    FE->>FE: 폼 검증
+    FE->>BE: API 호출
+    BE->>BE: 시장 데이터 수집/캐싱
+    BE->>Engine: 시그널 사전 계산
+    Engine->>Engine: 일별 매매 시뮬레이션 (SELL → BUY → SNAPSHOT)
+    Note over Engine: 이중 시장 시: 자본 분할 →<br/>KOSPI·NASDAQ 독립 시뮬레이션 →<br/>환율 환산 합산
+    Engine-->>BE: 시뮬레이션 결과
+    BE->>BE: 지표 계산 (수익률, MDD, 승률, 수수료)
+    BE-->>FE: 결과 응답
+    FE-->>User: 차트 · 지표 · 거래 내역 렌더링
 ```
 
 매매 알고리즘 상세는 [algorithm.md](./05-algorithm.md)를 참고한다.
@@ -84,68 +94,53 @@
 
 ### 백테스트 실행 흐름
 
-```
-┌──────────────────┐    POST /api/backtests/run     ┌──────────────────┐
-│  Frontend        │ ────────────────────────────→  │  Backend API     │
-│                  │                                │                  │
-│  useRunBacktest()│                                │  api.py: run()   │
-│  → runBacktest() │                                │                  │
-│  (Axios POST)    │  ←──────────────────────────── │  serialize_result│
-│                  │    JSON: BacktestResultSchema  │  ()              │
-└──────────────────┘                                └────────┬─────────┘
-                                                             │
-                                          ┌──────────────────┼──────────────────┐
-                                          │ 1. 데이터 로딩      │                  │
-                                          ▼                  ▼                  ▼
-                                ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
-                                │ fetch_stock  │  │ fetch_all    │  │ fetch_kospi_index │
-                                │ _listing()   │  │ _prices()    │  │ fetch_nasdaq_index│
-                                │ 종목 목록     │  │ 전종목 가격   │  │ fetch_exchange    │
-                                │              │  │              │  │ _rate()           │
-                                └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘
-                                       │                 │                   │
-                                       │                 ▼                   │
-                                       │       ┌──────────────────┐          │
-                                       │       │ fetch_price_data │          │
-                                       │       │ (종목별 호출)     │          │
-                                       │       └────────┬─────────┘          │
-                                       │                │                    │
-                                       ▼                ▼                    ▼
-                                ┌───────────────────────────────────────────────┐
-                                │              cache.py                         │
-                                │  load_from_cache() → 히트 시 Parquet 반환     │
-                                │  미스 시 → FinanceDataReader → save_to_cache()│
-                                └───────────────────────────────────────────────┘
-                                                             │
-                                          ┌──────────────────┘
-                                          │ 2. 백테스트 실행
-                                          ▼
-                                ┌──────────────────────────────────────┐
-                                │  backtest.py                         │
-                                │                                      │
-                                │  run_backtest()                      │
-                                │  또는 run_dual_market_backtest()     │
-                                └──────────────────┬───────────────────┘
-                                                   │
-                                    ┌──────────────┼──────────────┐
-                                    ▼              ▼              ▼
-                          ┌──────────────┐  ┌───────────┐  ┌──────────────┐
-                          │ signals.py   │  │ 일별 루프  │  │ portfolio.py │
-                          │              │  │            │  │              │
-                          │ _precompute  │  │ SELL Phase │  │ Portfolio    │
-                          │ _signals()   │  │ BUY Phase  │  │ .buy()      │
-                          │              │  │ SNAPSHOT   │  │ .sell_all() │
-                          │ • 연속상승   │  │            │  │ .snapshot() │
-                          │ • 연속하락   │  │            │  │              │
-                          │ • 긴급매도   │  │            │  │              │
-                          └──────────────┘  └───────────┘  └──────────────┘
-                                                   │
-                                                   ▼
-                                          ┌──────────────────┐
-                                          │ _compute_metrics │
-                                          │ 수익률·MDD·승률  │
-                                          │ ·수수료 계산      │
-                                          └──────────────────┘
+```mermaid
+sequenceDiagram
+    participant FE as Frontend<br/>useRunBacktest()
+    participant API as Backend API<br/>api.py
+    participant Fetcher as fetcher.py
+    participant Cache as cache.py
+    participant FDR as FinanceDataReader
+    participant BT as backtest.py
+    participant Sig as signals.py
+    participant Port as portfolio.py
+
+    FE->>API: POST /api/backtests/run
+
+    rect rgb(230, 240, 255)
+        Note over API,FDR: 1. 데이터 로딩
+        API->>Fetcher: fetch_stock_listing()
+        API->>Fetcher: fetch_all_prices()
+        API->>Fetcher: fetch_kospi_index() / fetch_nasdaq_index()
+        Fetcher->>Cache: load_from_cache()
+        alt 캐시 히트
+            Cache-->>Fetcher: Parquet 반환
+        else 캐시 미스
+            Fetcher->>FDR: DataReader()
+            FDR-->>Fetcher: 데이터
+            Fetcher->>Cache: save_to_cache()
+        end
+        Fetcher-->>API: 종목 목록 + 가격 데이터 + 지수
+    end
+
+    rect rgb(230, 255, 230)
+        Note over API,Port: 2. 백테스트 실행
+        API->>BT: run_backtest() / run_dual_market_backtest()
+        BT->>Sig: _precompute_signals()
+        Note over Sig: 연속상승 · 연속하락 · 긴급매도
+        Sig-->>BT: 시그널 데이터
+        loop 일별 루프 (trading_dates)
+            BT->>Port: SELL: sell_all()
+            BT->>Port: BUY: buy()
+            BT->>Port: SNAPSHOT: snapshot()
+        end
+        BT->>BT: _compute_metrics()
+        Note over BT: 수익률 · MDD · 승률 · 수수료
+    end
+
+    BT-->>API: BacktestResult
+    API->>API: serialize_result()
+    API-->>FE: JSON: BacktestResultSchema
 ```
 
 ### 함수 호출 체인
