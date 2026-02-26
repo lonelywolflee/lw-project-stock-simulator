@@ -12,7 +12,6 @@ export const CHART_COLORS = {
   totalValue: "hsl(0, 72%, 51%)",
   portfolio: "hsl(262, 83%, 58%)",
   kospi: "hsl(0, 72%, 51%)",
-  nasdaq: "hsl(221, 83%, 53%)",
 } as const;
 
 /** 차트 색상 (투명도 포함) */
