@@ -53,7 +53,7 @@ cd backend && uv run pytest tests/ -v
 cd backend && uv run pytest tests/test_backtest.py -v
 
 # 특정 테스트 클래스/메서드
-cd backend && uv run pytest tests/test_backtest.py::TestDualMarketBacktest::test_dual_market_capital_split -v
+cd backend && uv run pytest tests/test_backtest.py::TestBacktest::test_basic_backtest -v
 
 # Django 개발 서버
 cd backend && uv run python manage.py runserver

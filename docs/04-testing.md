@@ -14,7 +14,7 @@ cd backend && uv run pytest tests/ -v
 cd backend && uv run pytest tests/test_backtest.py -v
 
 # 특정 클래스 또는 메서드
-cd backend && uv run pytest tests/test_backtest.py::TestDualMarketBacktest::test_dual_market_capital_split -v
+cd backend && uv run pytest tests/test_backtest.py::TestBacktest::test_basic_backtest -v
 ```
 
 ## 테스트 구조

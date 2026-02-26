@@ -17,8 +17,6 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 | 종목별 일별 OHLCV | `fetch_all_prices()` | 시그널 계산 + 매매 가격 |
 | 상장 종목 목록 | `fetch_stock_listing()` | 시총 정렬, 종목명 매핑 |
 | KOSPI 지수 (KS11) | `fetch_kospi_index()` | 벤치마크 비교 |
-| NASDAQ Composite (IXIC) | `fetch_nasdaq_index()` | 벤치마크 비교 |
-| USD/KRW 환율 | `fetch_exchange_rate()` | 이중 시장 합산 |
 
 ## 시그널 사전 계산
 
@@ -56,16 +54,6 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 
 현재 보유 종목의 시가 평가액을 계산하고, 일별 자산 현황(현금 + 주식 평가액 = 총자산)을 기록한다.
 
-## 이중 시장 모델
-
-`kospi_ratio`가 100 미만일 때 활성화된다:
-
-1. **자본 분할**: 초기 자금을 `kospi_ratio : (100 - kospi_ratio)` 비율로 분할
-2. **환전**: NASDAQ 몫을 시작일 USD/KRW 환율로 USD 환전
-3. **독립 실행**: KOSPI, NASDAQ 각각 `run_backtest()`로 독립 시뮬레이션
-4. **합산**: 일별 NASDAQ 자산을 해당일 환율로 KRW 환산 후 KOSPI 자산과 합산
-5. **수수료**: NASDAQ 수수료는 시작일 환율로 KRW 환산하여 합산
-
 ## 입력 파라미터
 
 | 파라미터 | 타입 | 기본값 | 설명 |
@@ -80,15 +68,14 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 | `max_buy_amount` | float | (필수) | 종목당 최대 매수 금액 |
 | `min_balance` | float | (필수) | 매수 후 최소 잔고 |
 | `sort_method` | str | "market_cap" | 매수 정렬 방식 ("market_cap" 또는 "return_rate") |
-| `kospi_ratio` | int | 100 | KOSPI 투자 비율 (0~100, 나머지 NASDAQ) |
 
 ## 출력
 
 | 필드 | 설명 |
 |------|------|
 | `daily_snapshots` | 일별 자산 현황 (date, cash, stock_value, total_value) |
-| `trades` | 전체 거래 내역 (date, code, name, side, price, quantity, amount, fee, profit, market) |
-| `kospi_index` / `nasdaq_index` | 벤치마크 지수 데이터 |
+| `trades` | 전체 거래 내역 (date, code, name, side, price, quantity, amount, fee, profit) |
+| `kospi_index` | 벤치마크 지수 데이터 |
 | `final_return_pct` | 최종 수익률 (%) |
 | `mdd_pct` | 최대 낙폭 MDD (%) |
 | `total_trades` | 총 거래 횟수 |
