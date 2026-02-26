@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { Trade } from "@/api/types";
-import { formatCurrency, formatDate, formatNumber } from "@/utils/formatters";
+import { formatKRW, formatDate, formatNumber } from "@/utils/formatters";
 import { getProfitClass } from "@/utils/colors";
 
 interface TradeTableProps {
@@ -29,7 +29,6 @@ export function TradeTable({ trades }: TradeTableProps) {
       <TableHeader>
         <TableRow>
           <TableHead>일자</TableHead>
-          <TableHead>시장</TableHead>
           <TableHead>종목</TableHead>
           <TableHead>구분</TableHead>
           <TableHead className="text-right">가격</TableHead>
@@ -46,11 +45,6 @@ export function TradeTable({ trades }: TradeTableProps) {
               {formatDate(t.date)}
             </TableCell>
             <TableCell>
-              <Badge variant="outline" className="text-xs">
-                {t.market}
-              </Badge>
-            </TableCell>
-            <TableCell>
               <span className="font-medium">{t.name}</span>
               <span className="ml-1 text-xs text-muted-foreground">
                 {t.code}
@@ -65,22 +59,22 @@ export function TradeTable({ trades }: TradeTableProps) {
               </Badge>
             </TableCell>
             <TableCell className="text-right tabular-nums">
-              {formatCurrency(t.price, t.market)}
+              {formatKRW(t.price)}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {formatNumber(t.quantity)}
             </TableCell>
             <TableCell className="text-right tabular-nums">
-              {formatCurrency(t.amount, t.market)}
+              {formatKRW(t.amount)}
             </TableCell>
             <TableCell className="text-right tabular-nums text-muted-foreground">
-              {formatCurrency(t.fee, t.market)}
+              {formatKRW(t.fee)}
             </TableCell>
             <TableCell
               className={`text-right tabular-nums font-medium ${getProfitClass(t.profit)}`}
             >
               {t.side === "SELL"
-                ? formatCurrency(t.profit, t.market)
+                ? formatKRW(t.profit)
                 : "-"}
             </TableCell>
           </TableRow>
