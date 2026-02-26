@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -35,7 +34,6 @@ const schema = z.object({
   max_buy_amount: z.coerce.number().min(100_000),
   min_balance: z.coerce.number().min(0),
   sort_method: z.enum(["market_cap", "return_rate"]),
-  kospi_ratio: z.number().min(0).max(100),
 }).refine((data) => new Date(data.start_date) < new Date(data.end_date), {
   message: "종료일은 시작일보다 이후여야 합니다",
   path: ["end_date"],
@@ -53,7 +51,6 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -68,12 +65,8 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
       max_buy_amount: 5_000_000,
       min_balance: 1_000_000,
       sort_method: "market_cap",
-      kospi_ratio: 50,
     },
   });
-
-  const kospiRatio = watch("kospi_ratio");
-  const nasdaqRatio = 100 - kospiRatio;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -120,33 +113,6 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
               {...register("fee_rate")}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* 시장 설정 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium">시장 비율</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>KOSPI {kospiRatio}%</span>
-            <span>NASDAQ {nasdaqRatio}%</span>
-          </div>
-          <Slider
-            value={[kospiRatio]}
-            onValueChange={([v]) => setValue("kospi_ratio", v)}
-            min={0}
-            max={100}
-            step={10}
-          />
-          <p className="text-xs text-muted-foreground">
-            {kospiRatio === 100
-              ? "KOSPI 단일 시장"
-              : kospiRatio === 0
-                ? "NASDAQ 단일 시장"
-                : "이중 시장 (KOSPI + NASDAQ)"}
-          </p>
         </CardContent>
       </Card>
 
