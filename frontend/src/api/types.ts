@@ -11,7 +11,6 @@ export interface BacktestParams {
   max_buy_amount: number;
   min_balance: number;
   sort_method: "market_cap" | "return_rate";
-  kospi_ratio: number;
 }
 
 export interface Trade {
@@ -24,7 +23,6 @@ export interface Trade {
   amount: number;
   fee: number;
   profit: number;
-  market: string;
 }
 
 export interface DailySnapshot {
@@ -43,10 +41,6 @@ export interface BacktestResult {
   daily_snapshots: DailySnapshot[];
   trades: Trade[];
   kospi_index: MarketIndex | null;
-  nasdaq_index: MarketIndex | null;
-  initial_exchange_rate: number;
-  kospi_snapshots: DailySnapshot[];
-  nasdaq_snapshots: DailySnapshot[];
   final_return_pct: number;
   mdd_pct: number;
   total_trades: number;
