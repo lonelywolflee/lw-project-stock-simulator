@@ -25,7 +25,6 @@ def serialize_trades(trades):
             "amount": t.amount,
             "fee": t.fee,
             "profit": t.profit,
-            "market": t.market,
         }
         for t in trades
     ]
@@ -47,10 +46,6 @@ def serialize_result(result):
         "daily_snapshots": serialize_snapshots(result.daily_snapshots),
         "trades": serialize_trades(result.trades),
         "kospi_index": serialize_index(result.kospi_index),
-        "nasdaq_index": serialize_index(result.nasdaq_index),
-        "initial_exchange_rate": result.initial_exchange_rate,
-        "kospi_snapshots": serialize_snapshots(result.kospi_snapshots),
-        "nasdaq_snapshots": serialize_snapshots(result.nasdaq_snapshots),
         "final_return_pct": result.final_return_pct,
         "mdd_pct": result.mdd_pct,
         "total_trades": result.total_trades,

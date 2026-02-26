@@ -18,7 +18,6 @@ class BacktestParamsSchema(Schema):
     max_buy_amount: float
     min_balance: float
     sort_method: Literal["market_cap", "return_rate"] = "market_cap"
-    kospi_ratio: int = 100
 
 
 class TradeSchema(Schema):
@@ -33,7 +32,6 @@ class TradeSchema(Schema):
     amount: float
     fee: float
     profit: float
-    market: str
 
 
 class DailySnapshotSchema(Schema):
@@ -58,10 +56,6 @@ class BacktestResultSchema(Schema):
     daily_snapshots: list[DailySnapshotSchema]
     trades: list[TradeSchema]
     kospi_index: MarketIndexSchema | None = None
-    nasdaq_index: MarketIndexSchema | None = None
-    initial_exchange_rate: float = 0.0
-    kospi_snapshots: list[DailySnapshotSchema] = []
-    nasdaq_snapshots: list[DailySnapshotSchema] = []
     final_return_pct: float
     mdd_pct: float
     total_trades: int
