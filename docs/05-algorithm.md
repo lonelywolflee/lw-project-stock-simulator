@@ -25,7 +25,8 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 | 시그널 | 함수 | 입력 | 출력 |
 |--------|------|------|------|
 | 매수 | `detect_consecutive_rises(close, n)` | 종가 Series, 연속 상승 일수 | Boolean Series |
-| 매도 (추세 하락) | `detect_consecutive_falls(close, m)` | 종가 Series, 연속 하락 일수 | Boolean Series |
+| 매도 (1차 추세 하락) | `detect_consecutive_falls(close, m1)` | 종가 Series, 1차 연속 하락 일수 | Boolean Series |
+| 매도 (2차 추세 하락) | `detect_consecutive_falls(close, m2)` | 종가 Series, 2차 연속 하락 일수 | Boolean Series |
 | 매도 (긴급 손절) | `detect_emergency_sell(close, y_pct)` | 종가 Series, 급락 비율(%) | Boolean Series |
 
 ## 일별 시뮬레이션 루프
@@ -34,11 +35,14 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 
 ### 1단계: SELL (매도)
 
-보유 종목을 순회하며 매도 시그널을 확인한다:
+보유 종목을 순회하며 매도 시그널을 확인한다. 우선순위 순서:
 
-1. **추세 하락 매도**: m일 연속 하락 → 전량 매도
-2. **긴급 손절**: 당일 y% 이상 급락 → 전량 매도
-3. 매도 시 금액의 `fee_rate`%를 수수료로 차감
+1. **긴급 손절** (최우선): 당일 y% 이상 급락 → 전량 매도
+2. **2차 추세 하락 매도**: m2일 연속 하락 → 남은 수량 전량 매도
+3. **1차 추세 하락 매도**: m1일 연속 하락 → 보유 수량의 `sell_ratio_1`% 매도 (반올림)
+   - **소액 스킵**: 보유 평가액 ≤ `max_buy_amount × sell_ratio_1 / 100` 이면 1차 매도 스킵 (실행 완료 간주)
+   - **상태 추적**: 1차 매도 실행 후 `phase1_sold`에 기록, 연속 하락이 끊기면 리셋
+4. 매도 시 금액의 `fee_rate`%를 수수료로 차감
 
 ### 2단계: BUY (매수)
 
@@ -63,7 +67,9 @@ FinanceDataReader를 통해 다음 데이터를 수집한다:
 | `end_date` | str | (필수) | 시뮬레이션 종료일 (YYYY-MM-DD) |
 | `fee_rate` | float | 0.015 | 매매 수수료율 (%) |
 | `n_rise_days` | int | 3 | 매수 시그널: 연속 상승 일수 |
-| `m_fall_days` | int | 3 | 매도 시그널: 연속 하락 일수 |
+| `m_fall_days_1` | int | 3 | 1차 매도 시그널: 연속 하락 일수 (부분 매도) |
+| `m_fall_days_2` | int | 5 | 2차 매도 시그널: 연속 하락 일수 (전량 매도, 1차 포함) |
+| `sell_ratio_1` | int | 50 | 1차 매도 비율 (10~90%, 1% 단위) |
 | `y_emergency_pct` | float | 5.0 | 긴급 매도: 당일 급락 비율 (%) |
 | `max_buy_amount` | float | (필수) | 종목당 최대 매수 금액 |
 | `min_balance` | float | (필수) | 매수 후 최소 잔고 |
