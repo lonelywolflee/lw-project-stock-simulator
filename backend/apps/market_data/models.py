@@ -34,7 +34,7 @@ class StockListing(models.Model):
 class StockDailyPrice(models.Model):
     """종목 및 지수의 일별 OHLCV 데이터."""
 
-    code = models.CharField(max_length=20, db_index=True)
+    code = models.CharField(max_length=20)
     date = models.DateField(db_index=True)
     open = models.FloatField()
     high = models.FloatField()
@@ -45,9 +45,8 @@ class StockDailyPrice(models.Model):
 
     class Meta:
         db_table = "market_data_stock_daily_price"
-        unique_together = [("code", "date")]
-        indexes = [
-            models.Index(fields=["code", "date"]),
+        constraints = [
+            models.UniqueConstraint(fields=["code", "date"], name="unique_code_date"),
         ]
 
     def __str__(self):

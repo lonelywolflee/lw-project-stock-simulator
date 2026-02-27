@@ -65,10 +65,9 @@ def _listing_from_db() -> pd.DataFrame:
     """DB에서 종목 목록을 DataFrame으로 반환한다."""
     from apps.market_data.models import StockListing
 
-    qs = StockListing.objects.all().values("code", "name", "market_cap")
-    if not qs.exists():
+    records = list(StockListing.objects.all().values("code", "name", "market_cap"))
+    if not records:
         return pd.DataFrame(columns=["Code", "Name", "Marcap"])
-    records = list(qs)
     return pd.DataFrame({
         "Code": [r["code"] for r in records],
         "Name": [r["name"] for r in records],
@@ -77,23 +76,28 @@ def _listing_from_db() -> pd.DataFrame:
 
 
 def _save_listing_to_db(df: pd.DataFrame) -> None:
-    """종목 목록 DataFrame을 DB에 upsert한다."""
+    """종목 목록 DataFrame을 DB에 벌크 upsert한다."""
     from apps.market_data.models import StockListing
 
     code_col = "Code" if "Code" in df.columns else "Symbol"
     cap_col = "Marcap" if "Marcap" in df.columns else "MarketCap"
 
+    objects = []
     for _, row in df.iterrows():
         code = row.get(code_col, "")
         if not code:
             continue
-        StockListing.objects.update_or_create(
+        objects.append(StockListing(
             code=code,
-            defaults={
-                "name": row.get("Name", ""),
-                "market_cap": int(row.get(cap_col, 0)) if row.get(cap_col) else None,
-            },
-        )
+            name=row.get("Name", ""),
+            market_cap=int(row.get(cap_col, 0)) if row.get(cap_col) else None,
+        ))
+    StockListing.objects.bulk_create(
+        objects,
+        update_conflicts=True,
+        unique_fields=["code"],
+        update_fields=["name", "market_cap"],
+    )
 
 
 def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
@@ -141,17 +145,25 @@ def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
 
 
 def _price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
-    """DB에서 가격 데이터를 DataFrame으로 반환한다."""
+    """DB에서 가격 데이터를 DataFrame으로 반환한다.
+
+    end 날짜 이후 데이터가 없으면 불완전한 데이터로 판단하여 None을 반환한다.
+    """
     from apps.market_data.models import StockDailyPrice
 
-    qs = StockDailyPrice.objects.filter(
-        code=code, date__gte=start, date__lte=end,
-    ).order_by("date").values("date", "open", "high", "low", "close", "volume")
-
-    if not qs.exists():
+    records = list(
+        StockDailyPrice.objects.filter(
+            code=code, date__gte=start, date__lte=end,
+        ).order_by("date").values("date", "open", "high", "low", "close", "volume")
+    )
+    if not records:
         return None
 
-    records = list(qs)
+    # end 날짜 근처 데이터가 없으면 불완전 → 네트워크 fetch 유도
+    last_date = str(records[-1]["date"])
+    if last_date < end:
+        return None
+
     df = pd.DataFrame(records)
     df.index = pd.to_datetime(df.pop("date"))
     df.columns = ["Open", "High", "Low", "Close", "Volume"]
