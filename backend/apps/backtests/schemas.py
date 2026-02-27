@@ -13,7 +13,9 @@ class BacktestParamsSchema(Schema):
     end_date: str
     fee_rate: float = 0.015
     n_rise_days: int = 3
-    m_fall_days: int = 3
+    m_fall_days_1: int = 3
+    m_fall_days_2: int = 5
+    sell_ratio_1: int = 50
     y_emergency_pct: float = 5.0
     max_buy_amount: float
     min_balance: float
