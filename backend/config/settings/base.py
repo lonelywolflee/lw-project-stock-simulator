@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
+    "apps.accounts",
     "apps.backtests",
     "apps.market_data",
 ]
@@ -72,6 +73,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 STATIC_URL = "static/"
 
 LOGIN_URL = "/login/"
+
+# CSRF
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+).split(",")
 
 # CORS
 CORS_ALLOWED_ORIGINS = os.getenv(
