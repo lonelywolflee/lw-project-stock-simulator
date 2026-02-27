@@ -132,6 +132,46 @@ class Portfolio:
         ))
         return True
 
+    def sell_partial(self, date: str, code: str, name: str, price: float,
+                     ratio: int) -> bool:
+        """보유 종목의 일부를 매도한다.
+
+        Args:
+            date: 거래일
+            code: 종목코드
+            name: 종목명
+            price: 매도 단가
+            ratio: 매도 비율 (1~100, 반올림 적용)
+
+        Returns:
+            매도 성공 여부
+        """
+        if code not in self.holdings:
+            return False
+
+        h = self.holdings[code]
+        sell_qty = round(h.quantity * ratio / 100)
+        if sell_qty <= 0:
+            return False
+
+        if sell_qty >= h.quantity:
+            return self.sell_all(date, code, name, price)
+
+        amount = sell_qty * price
+        fee = amount * (self.fee_rate / 100)
+        net_amount = amount - fee
+        profit = net_amount - (h.avg_price * sell_qty)
+
+        self.cash += net_amount
+        h.quantity -= sell_qty
+
+        self.trades.append(Trade(
+            date=date, code=code, name=name, side="SELL",
+            price=price, quantity=sell_qty, amount=amount, fee=fee,
+            profit=profit,
+        ))
+        return True
+
     def snapshot(self, date: str, prices: dict[str, float]) -> DailySnapshot:
         """일별 자산 현황을 기록하고 반환한다.
 

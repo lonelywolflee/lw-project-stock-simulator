@@ -100,3 +100,60 @@ class TestFeeCalculation:
         sell_trade = [t for t in p.trades if t.side == "SELL"][0]
         expected_fee = sell_trade.amount * 0.01
         assert abs(sell_trade.fee - expected_fee) < 1
+
+
+class TestSellPartial:
+    def test_basic_partial_sell(self):
+        """50% 부분 매도 시 수량이 절반으로 줄어야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        p.buy("2024-01-02", "005930", "삼성전자", 70000, 5_000_000, 1_000_000)
+        original_qty = p.holdings["005930"].quantity  # 71
+
+        result = p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=50)
+        assert result is True
+        assert "005930" in p.holdings
+        expected_sold = round(original_qty * 50 / 100)  # 36 (반올림)
+        assert p.holdings["005930"].quantity == original_qty - expected_sold
+        sell_trade = [t for t in p.trades if t.side == "SELL"][0]
+        assert sell_trade.quantity == expected_sold
+
+    def test_partial_sell_rounds(self):
+        """매도 수량은 반올림되어야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        p.buy("2024-01-02", "005930", "삼성전자", 70000, 5_000_000, 1_000_000)
+        original_qty = p.holdings["005930"].quantity  # 71
+
+        result = p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=30)
+        assert result is True
+        expected_sold = round(original_qty * 30 / 100)  # round(21.3) = 21
+        assert p.holdings["005930"].quantity == original_qty - expected_sold
+
+    def test_partial_sell_nonexistent(self):
+        """미보유 종목 부분 매도는 실패해야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        result = p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=50)
+        assert result is False
+
+    def test_partial_sell_records_profit(self):
+        """부분 매도 시 매도 수량 기준으로 손익이 기록되어야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        p.buy("2024-01-02", "005930", "삼성전자", 70000, 5_000_000, 1_000_000)
+        p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=50)
+        sell_trade = [t for t in p.trades if t.side == "SELL"][0]
+        assert sell_trade.profit > 0  # 70000 → 75000 이익
+
+    def test_partial_sell_preserves_avg_price(self):
+        """부분 매도 후 남은 보유분의 평균 매입가는 변하지 않아야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        p.buy("2024-01-02", "005930", "삼성전자", 70000, 5_000_000, 1_000_000)
+        avg_before = p.holdings["005930"].avg_price
+        p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=50)
+        assert p.holdings["005930"].avg_price == avg_before
+
+    def test_partial_sell_100_removes_holding(self):
+        """100% 부분 매도는 전량 매도와 같아야 한다."""
+        p = Portfolio(cash=10_000_000, fee_rate=0.015)
+        p.buy("2024-01-02", "005930", "삼성전자", 70000, 5_000_000, 1_000_000)
+        result = p.sell_partial("2024-01-05", "005930", "삼성전자", 75000, ratio=100)
+        assert result is True
+        assert "005930" not in p.holdings
