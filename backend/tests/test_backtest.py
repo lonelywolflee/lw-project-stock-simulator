@@ -294,9 +294,9 @@ class TestMultiStageSell:
 
         sell_trades = [t for t in result.trades if t.side == "SELL"]
         # 1차 스킵 + 2차 전량매도 = 매도 1건
-        if len(sell_trades) > 0:
-            buy_trade = [t for t in result.trades if t.side == "BUY"][0]
-            assert sell_trades[0].quantity == buy_trade.quantity
+        assert len(sell_trades) == 1, f"Expected 1 sell (phase-1 skipped), got {len(sell_trades)}"
+        buy_trade = [t for t in result.trades if t.side == "BUY"][0]
+        assert sell_trades[0].quantity == buy_trade.quantity
 
     def test_reset_after_rise(self):
         """연속 하락이 끊기면 1차 상태가 리셋되어야 한다."""
@@ -325,7 +325,7 @@ class TestMultiStageSell:
 
         sell_trades = [t for t in result.trades if t.side == "SELL"]
         # 1차 매도 2회 (리셋 후 다시 발동)
-        assert len(sell_trades) >= 2
+        assert len(sell_trades) == 2
 
     def test_emergency_sell_overrides_multi_stage(self):
         """긴급 손절은 다단계 매도 상태와 관계없이 전량 매도."""
