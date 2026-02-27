@@ -141,7 +141,7 @@ def run_backtest(
     price_data: dict[str, pd.DataFrame],
     listing_df: pd.DataFrame | None = None,
     kospi_df: pd.DataFrame | None = None,
-    progress_callback=None,
+    event_callback=None,
 ) -> BacktestResult:
     """백테스트를 실행한다.
 
@@ -150,7 +150,7 @@ def run_backtest(
         price_data: {종목코드: 가격 DataFrame} 딕셔너리
         listing_df: KOSPI 상장 종목 목록 (시총 정렬용)
         kospi_df: KOSPI 지수 DataFrame (벤치마크)
-        progress_callback: (current, total) 콜백
+        event_callback: 이벤트 딕셔너리 콜백
 
     Returns:
         BacktestResult
@@ -193,7 +193,20 @@ def run_backtest(
                 continue
             price = price_data[code].loc[date, "Close"]
             name = name_map.get(code, code)
-            portfolio.sell_all(date_str, code, name, price)
+            holding = portfolio.holdings.get(code)
+            avg_price = holding.avg_price if holding else price
+            if portfolio.sell_all(date_str, code, name, price):
+                if event_callback:
+                    profit_pct = round((price - avg_price) / avg_price * 100, 1) if avg_price > 0 else 0.0
+                    event_callback({
+                        "type": "trade",
+                        "side": "SELL",
+                        "date": date_str,
+                        "name": name,
+                        "code": code,
+                        "price": price,
+                        "profit_pct": profit_pct,
+                    })
 
         # ── BUY Phase ──
         buy_candidates: list[tuple[str, str, float]] = []
@@ -218,8 +231,19 @@ def run_backtest(
         for code, name, price in buy_candidates:
             if portfolio.cash < params.min_balance:
                 break
-            portfolio.buy(date_str, code, name, price,
-                         params.max_buy_amount, params.min_balance)
+            if portfolio.buy(date_str, code, name, price,
+                             params.max_buy_amount, params.min_balance):
+                if event_callback:
+                    last_trade = portfolio.trades[-1]
+                    event_callback({
+                        "type": "trade",
+                        "side": "BUY",
+                        "date": date_str,
+                        "name": name,
+                        "code": code,
+                        "price": price,
+                        "quantity": last_trade.quantity,
+                    })
 
         # ── SNAPSHOT ──
         current_prices = {}
@@ -228,8 +252,13 @@ def run_backtest(
                 current_prices[code] = price_data[code].loc[date, "Close"]
         portfolio.snapshot(date_str, current_prices)
 
-        if progress_callback:
-            progress_callback(day_idx + 1, total_days)
+        if event_callback:
+            event_callback({
+                "type": "progress",
+                "current": day_idx + 1,
+                "total": total_days,
+                "date": date_str,
+            })
 
     metrics = _compute_metrics(portfolio, params.initial_cash)
 

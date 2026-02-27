@@ -161,4 +161,40 @@ class TestRunBacktest:
         # MDD는 0 이하여야 함 (하락을 의미)
         assert result.mdd_pct <= 0
 
+    def test_event_callback_reports_progress_and_trades(self):
+        """event_callback이 progress와 trade 이벤트를 보고해야 한다."""
+        prices = [100, 101, 102, 103, 102, 101, 100]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-12",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days=3,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        events = []
+        result = run_backtest(params, price_data, listing, event_callback=events.append)
+
+        # progress 이벤트가 있어야 함
+        progress_events = [e for e in events if e["type"] == "progress"]
+        assert len(progress_events) > 0
+
+        # 매매가 발생했으면 trade 이벤트도 있어야 함
+        if result.total_trades > 0:
+            trade_events = [e for e in events if e["type"] == "trade"]
+            assert len(trade_events) > 0
+
+        # progress 이벤트에 필수 필드 확인
+        p = progress_events[0]
+        assert "current" in p
+        assert "total" in p
+        assert "date" in p
+
 
