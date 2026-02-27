@@ -36,7 +36,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
       case "error":
         return "text-destructive";
       case "trade":
-        if (entry.tradeSide === "BUY") return "text-profit";
+        if (entry.tradeSide === "BUY") return "text-mint";
         if (entry.tradeSide === "SELL") {
           return (entry.profitPct ?? 0) >= 0
             ? "text-profit"

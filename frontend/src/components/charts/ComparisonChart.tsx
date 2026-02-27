@@ -8,7 +8,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { BacktestResult } from "@/api/types";
 import { formatDate } from "@/utils/formatters";
 import { CHART_COLORS } from "@/utils/colors";
@@ -63,56 +62,56 @@ export function ComparisonChart({ result }: ComparisonChartProps) {
   }));
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">
-          벤치마크 비교 (Base=100)
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={360}>
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 11 }}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              tickLine={false}
-              width={50}
-              domain={["auto", "auto"]}
-            />
-            <Tooltip
-              contentStyle={{
-                borderRadius: "0.5rem",
-                border: "1px solid hsl(var(--border))",
-                background: "hsl(var(--card))",
-              }}
-            />
-            <Legend />
+    <div className="rounded-lg border border-border/60 bg-card p-4">
+      <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        벤치마크 비교 <span className="text-muted-foreground/50">(Base=100)</span>
+      </h3>
+      <ResponsiveContainer width="100%" height={360}>
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#2c2c42" />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 10, fill: "#8e8ea8" }}
+            tickLine={false}
+            axisLine={{ stroke: "#2c2c42" }}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tick={{ fontSize: 10, fill: "#8e8ea8" }}
+            tickLine={false}
+            axisLine={false}
+            width={50}
+            domain={["auto", "auto"]}
+          />
+          <Tooltip
+            contentStyle={{
+              borderRadius: "0.375rem",
+              border: "1px solid #2c2c42",
+              background: "#101018",
+              fontSize: "12px",
+              fontFamily: "JetBrains Mono, monospace",
+            }}
+          />
+          <Legend />
+          <Line
+            type="monotone"
+            dataKey="포트폴리오"
+            stroke={CHART_COLORS.portfolio}
+            strokeWidth={2}
+            dot={false}
+          />
+          {kospi_index && (
             <Line
               type="monotone"
-              dataKey="포트폴리오"
-              stroke={CHART_COLORS.portfolio}
-              strokeWidth={2}
+              dataKey="KOSPI"
+              stroke={CHART_COLORS.kospi}
+              strokeWidth={1.5}
+              strokeDasharray="5 5"
               dot={false}
             />
-            {kospi_index && (
-              <Line
-                type="monotone"
-                dataKey="KOSPI"
-                stroke={CHART_COLORS.kospi}
-                strokeWidth={1.5}
-                strokeDasharray="5 5"
-                dot={false}
-              />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+          )}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

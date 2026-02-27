@@ -1,6 +1,5 @@
-import { ClockIcon } from "lucide-react";
+import { CheckCircleIcon, ClockIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { MetricsCards } from "@/components/metrics/MetricsCards";
 import { AssetChart } from "@/components/charts/AssetChart";
 import { ComparisonChart } from "@/components/charts/ComparisonChart";
@@ -16,12 +15,13 @@ export function BacktestResults({ result }: BacktestResultsProps) {
   return (
     <div className="space-y-4">
       {/* 실행 정보 */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant="outline" className="text-xs">
-          완료
-        </Badge>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5 rounded-full border border-mint/20 bg-mint/5 px-2.5 py-1 text-mint">
+          <CheckCircleIcon className="size-3" />
+          <span className="font-mono-data text-[11px] font-medium uppercase">완료</span>
+        </div>
         {result.execution_time > 0 && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 font-mono-data">
             <ClockIcon className="size-3" />
             {formatExecutionTime(result.execution_time)}
           </span>
@@ -33,10 +33,14 @@ export function BacktestResults({ result }: BacktestResultsProps) {
 
       {/* 탭 (자산 추이 / 벤치마크 비교 / 거래 내역) */}
       <Tabs defaultValue="asset">
-        <TabsList>
-          <TabsTrigger value="asset">자산 추이</TabsTrigger>
-          <TabsTrigger value="comparison">벤치마크 비교</TabsTrigger>
-          <TabsTrigger value="trades">
+        <TabsList className="border border-border/50 bg-card">
+          <TabsTrigger value="asset" className="font-mono-data text-xs">
+            자산 추이
+          </TabsTrigger>
+          <TabsTrigger value="comparison" className="font-mono-data text-xs">
+            벤치마크 비교
+          </TabsTrigger>
+          <TabsTrigger value="trades" className="font-mono-data text-xs">
             거래 내역 ({result.total_trades})
           </TabsTrigger>
         </TabsList>
@@ -47,7 +51,7 @@ export function BacktestResults({ result }: BacktestResultsProps) {
           <ComparisonChart result={result} />
         </TabsContent>
         <TabsContent value="trades" className="mt-4">
-          <div className="rounded-lg border">
+          <div className="rounded-lg border border-border/60">
             <TradeTable trades={result.trades} />
           </div>
         </TabsContent>
