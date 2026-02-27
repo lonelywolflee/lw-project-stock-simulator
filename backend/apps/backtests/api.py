@@ -30,6 +30,7 @@ PROGRESS_BATCH_SIZE = 10  # 주가 수집 진행률 이벤트 전송 주기
 def run(request, params: BacktestParamsSchema):
     """백테스트 실행 (SSE 스트리밍) — 진행 이벤트를 실시간으로 전송한다."""
     bp = BacktestParams(**params.dict())
+    username = request.user.username if request.user.is_authenticated else ""
     event_queue: queue.Queue = queue.Queue()
 
     def worker():
@@ -65,8 +66,9 @@ def run(request, params: BacktestParamsSchema):
             prices = fetch_all_prices(
                 codes, bp.start_date, bp.end_date,
                 progress_callback=on_data_progress,
+                username=username,
             )
-            kospi_index = fetch_kospi_index(bp.start_date, bp.end_date)
+            kospi_index = fetch_kospi_index(bp.start_date, bp.end_date, username=username)
             event_queue.put(("log", {
                 "message": f"✓ {len(prices)}개 종목 데이터 수집 완료",
             }))

@@ -32,26 +32,27 @@ def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
     return _retry(fdr.StockListing, market)
 
 
-def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
+def fetch_price_data(code: str, start: str, end: str, username: str = "") -> pd.DataFrame:
     """개별 종목의 일별 가격 데이터를 반환한다. 캐시를 우선 확인한다."""
-    cached = load_from_cache(code, start, end)
+    cached = load_from_cache(username, code, start, end)
     if cached is not None:
         return cached
 
     df = _retry(fdr.DataReader, code, start, end)
     if df is not None and not df.empty:
-        save_to_cache(code, start, end, df)
+        save_to_cache(username, code, start, end, df)
     return df
 
 
 def fetch_all_prices(
-    codes: list[str], start: str, end: str, progress_callback=None
+    codes: list[str], start: str, end: str,
+    progress_callback=None, username: str = "",
 ) -> dict[str, pd.DataFrame]:
     """여러 종목의 가격 데이터를 딕셔너리로 반환한다."""
     result: dict[str, pd.DataFrame] = {}
     for i, code in enumerate(codes):
         try:
-            df = fetch_price_data(code, start, end)
+            df = fetch_price_data(code, start, end, username=username)
             if df is not None and not df.empty:
                 result[code] = df
         except Exception as e:
@@ -61,15 +62,15 @@ def fetch_all_prices(
     return result
 
 
-def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
+def fetch_kospi_index(start: str, end: str, username: str = "") -> pd.DataFrame:
     """KOSPI 지수(KS11) 데이터를 반환한다."""
-    cached = load_from_cache("KS11", start, end)
+    cached = load_from_cache(username, "KS11", start, end)
     if cached is not None:
         return cached
 
     df = _retry(fdr.DataReader, "KS11", start, end)
     if df is not None and not df.empty:
-        save_to_cache("KS11", start, end, df)
+        save_to_cache(username, "KS11", start, end, df)
     return df
 
 
