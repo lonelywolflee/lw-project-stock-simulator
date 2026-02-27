@@ -48,3 +48,44 @@ export interface BacktestResult {
   total_fee: number;
   execution_time: number;
 }
+
+/** SSE 이벤트 타입 정의 */
+export interface SSEPhaseEvent {
+  phase: number;
+  total: number;
+  message: string;
+}
+
+export interface SSEProgressEvent {
+  phase: number;
+  current: number;
+  total: number;
+  message: string;
+}
+
+export interface SSETradeEvent {
+  phase: number;
+  date: string;
+  side: "BUY" | "SELL";
+  name: string;
+  code: string;
+  price?: number;
+  quantity?: number;
+  profit_pct?: number;
+}
+
+export interface SSELogEvent {
+  message: string;
+}
+
+export interface SSEErrorEvent {
+  message: string;
+}
+
+export type SSEEvent =
+  | { type: "phase"; data: SSEPhaseEvent }
+  | { type: "progress"; data: SSEProgressEvent }
+  | { type: "trade"; data: SSETradeEvent }
+  | { type: "log"; data: SSELogEvent }
+  | { type: "error"; data: SSEErrorEvent }
+  | { type: "result"; data: BacktestResult };
