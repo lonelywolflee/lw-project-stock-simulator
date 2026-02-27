@@ -1,45 +1,31 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+이 저장소의 Claude Code 진입점. 실제 내용은 `docs/`에 분리되어 있다.
 
-## Commands
+## 문서 구조
 
-```bash
-# Run all tests
-uv run pytest tests/ -v
+| 문서 | 내용 |
+|------|------|
+| [`docs/01-architecture.md`](docs/01-architecture.md) | 아키텍처, 설계 원칙, 기술 스택, 데이터 흐름, 프로젝트 구조, 모듈 요약, 인프라 |
+| [`docs/02-development.md`](docs/02-development.md) | 환경 설정, 실행 방법, 명령어 레퍼런스, 의존성 관리 |
+| [`docs/03-conventions.md`](docs/03-conventions.md) | 코딩 규칙, Import 규칙, UI 컨벤션, 주의사항(Gotchas) |
+| [`docs/04-testing.md`](docs/04-testing.md) | 테스트 전략, 실행 방법, 테스트 데이터 헬퍼 |
+| [`docs/05-algorithm.md`](docs/05-algorithm.md) | 매매 알고리즘 상세 명세 (입력/출력) |
+| [`docs/06-prd-v0.1.0.md`](docs/06-prd-v0.1.0.md) | v0.1.0 원본 기획서 (역사적 기록, 수정 금지) |
 
-# Run a single test file
-uv run pytest tests/test_backtest.py -v
+## 문서 관리 규칙
 
-# Run a specific test class or method
-uv run pytest tests/test_backtest.py::TestDualMarketBacktest::test_dual_market_capital_split -v
+1. **CLAUDE.md는 목차만 포함한다** — 코드 블록, 명령어, 기술 설명을 직접 넣지 않는다
+2. **새 문서 추가** → `docs/`에 생성 후 위 테이블에 링크 추가
+3. **기존 문서 수정** → `docs/` 파일을 직접 수정, CLAUDE.md는 링크만 갱신
+4. **CLAUDE.md 100줄 초과 금지** — 초과 시 `docs/`로 분리
 
-# Launch Streamlit UI
-uv run streamlit run src/ui/app.py
-```
+## README 작성 규칙
 
-## Architecture
+1. Root README: 프로젝트 소개 + 기능 요약 + docs/ 링크. Quick Start 코드블록 금지
+2. `backend/` · `frontend/` README: 해당 서비스의 빌드/실행/배포 단계만 포함
+3. README 간 내용 중복 금지 — 공통 정보는 `docs/` 링크로 대체
 
-KOSPI + NASDAQ 이중 시장 알고리즘 거래 시뮬레이터. FinanceDataReader로 주가를 수집하고, 시그널 기반 백테스트 엔진으로 시뮬레이션한 뒤, Streamlit으로 결과를 시각화한다.
-
-### Layer Structure
-
-```
-src/data/     → 외부 데이터 수집 (FinanceDataReader) + Parquet 캐시
-src/engine/   → 시그널 감지, 포트폴리오 관리, 백테스트 엔진 (순수 로직)
-src/ui/       → Streamlit 프레젠테이션 (sidebar, charts, tables)
-```
-
-## Rules Structure
-
-각 레이어의 상세 개발 가이드는 `.claude/rules/` 하위에 분리되어 있다:
-
-| 파일 | 대상 레이어 | 주요 내용 |
-|------|------------|-----------|
-| `.claude/rules/data.md` | `src/data/` | FinanceDataReader 래퍼, Parquet 캐시, 가격 데이터 형식 |
-| `.claude/rules/engine.md` | `src/engine/` | 시그널 사전 계산, 일별 루프 순서, 이중 시장 모델, 매매 알고리즘 |
-| `.claude/rules/ui.md` | `src/ui/` | Streamlit 오케스트레이션, 사이드바, Plotly 차트, 테이블 |
-
-### Commit Convention
+## 커밋 규칙
 
 커밋 타입: `docs:`, `feat:`, `refactor:`, `fix:` (한국어 메시지). `/commit` 커맨드 사용 시 자동으로 목적별 분리 커밋.

@@ -1,0 +1,3 @@
+# Vite-specific (root .gitignore covers node_modules, dist, logs, IDE, OS)
+dist-ssr
+*.local

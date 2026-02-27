@@ -1,0 +1,217 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* 금융 특화 색상 (한국 컨벤션: 상승=빨강, 하락=파랑) */
+  --color-profit: #ff4757;
+  --color-loss: #3b82f6;
+  --color-mint: #00d4aa;
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: #08080e;
+  --foreground: #ededf4;
+  --card: #101018;
+  --card-foreground: #ededf4;
+  --popover: #101018;
+  --popover-foreground: #ededf4;
+  --primary: #00d4aa;
+  --primary-foreground: #06060b;
+  --secondary: #181824;
+  --secondary-foreground: #ededf4;
+  --muted: #181824;
+  --muted-foreground: #8e8ea8;
+  --accent: #20202e;
+  --accent-foreground: #ededf4;
+  --destructive: #ff4757;
+  --destructive-foreground: #ffffff;
+  --border: #2c2c42;
+  --input: #20202e;
+  --ring: #00d4aa;
+  --chart-1: #00d4aa;
+  --chart-2: #5b7fff;
+  --chart-3: #ff4757;
+  --chart-4: #ffa502;
+  --chart-5: #a855f7;
+  --sidebar: #0c0c14;
+  --sidebar-foreground: #ededf4;
+  --sidebar-primary: #00d4aa;
+  --sidebar-primary-foreground: #06060b;
+  --sidebar-accent: #181824;
+  --sidebar-accent-foreground: #ededf4;
+  --sidebar-border: #2c2c42;
+  --sidebar-ring: #00d4aa;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Outfit", "Pretendard Variable", Pretendard, sans-serif;
+  }
+
+  /* 그리드 배경 패턴 */
+  #root {
+    position: relative;
+    min-height: 100vh;
+  }
+
+  #root::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+    background-size: 64px 64px;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 100%);
+  }
+
+  #root > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* 모노스페이스 숫자 */
+.font-mono-data {
+  font-family: "JetBrains Mono", "Pretendard Variable", monospace;
+  font-feature-settings: "tnum";
+}
+
+/* 디스플레이 폰트 */
+.font-display {
+  font-family: "Syne", "Outfit", sans-serif;
+}
+
+/* 글로우 효과 */
+.glow-mint {
+  box-shadow:
+    0 0 20px rgba(0, 212, 170, 0.15),
+    0 0 60px rgba(0, 212, 170, 0.05);
+}
+
+.glow-mint-sm {
+  box-shadow: 0 0 12px rgba(0, 212, 170, 0.1);
+}
+
+/* 글래스 카드 효과 */
+.glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(13, 13, 21, 0.8) 0%,
+    rgba(13, 13, 21, 0.6) 100%
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 30, 48, 0.8);
+}
+
+/* 스캔라인 오버레이 (미묘한 CRT 효과) */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* 민트 펄스 인디케이터 */
+@keyframes pulse-mint {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse-mint {
+  animation: pulse-mint 2s ease-in-out infinite;
+}
+
+/* 테이블 행 호버 */
+.table-row-hover:hover {
+  background: linear-gradient(90deg, rgba(0, 212, 170, 0.04) 0%, transparent 100%);
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c2c42;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a54;
+}
+
+/* recharts 다크 테마 오버라이드 */
+.recharts-cartesian-grid line {
+  stroke: #2c2c42 !important;
+}
+.recharts-text {
+  fill: #8e8ea8 !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10px !important;
+}
+.recharts-legend-item-text {
+  color: #8e8ea8 !important;
+  font-family: "Outfit", sans-serif !important;
+  font-size: 12px !important;
+}
