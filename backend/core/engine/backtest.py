@@ -20,11 +20,13 @@ class BacktestParams:
     end_date: str
     fee_rate: float         # 수수료율 (%)
     n_rise_days: int        # 매수 시그널: 연속 상승 일수
-    m_fall_days: int        # 매도 시그널: 연속 하락 일수
+    m_fall_days_1: int      # 1차 매도: 연속 하락 일수
+    m_fall_days_2: int      # 2차 매도: 연속 하락 일수 (1차 포함)
+    sell_ratio_1: int       # 1차 매도 비율 (10~90%)
     y_emergency_pct: float  # 긴급 매도: 급락 비율 (%)
     max_buy_amount: float   # 종목당 최대 매수 금액
     min_balance: float      # 매수 후 최소 잔고
-    sort_method: str = "market_cap"  # "market_cap" or "return_rate"
+    sort_method: str = "market_cap"
 
 
 @dataclass
@@ -43,7 +45,8 @@ class BacktestResult:
 def _precompute_signals(
     price_data: dict[str, pd.DataFrame],
     n_rise: int,
-    m_fall: int,
+    m_fall_1: int,
+    m_fall_2: int,
     y_pct: float,
 ) -> dict[str, dict[str, pd.Series]]:
     """모든 종목의 시그널을 사전 계산한다."""
@@ -54,7 +57,8 @@ def _precompute_signals(
         close = df["Close"]
         signals[code] = {
             "buy": detect_consecutive_rises(close, n_rise),
-            "sell_fall": detect_consecutive_falls(close, m_fall),
+            "sell_fall_1": detect_consecutive_falls(close, m_fall_1),
+            "sell_fall_2": detect_consecutive_falls(close, m_fall_2),
             "sell_emergency": detect_emergency_sell(close, y_pct),
         }
     return signals
@@ -165,30 +169,55 @@ def run_backtest(
 
     # 시그널 사전 계산
     signals = _precompute_signals(
-        price_data, params.n_rise_days, params.m_fall_days, params.y_emergency_pct
+        price_data, params.n_rise_days,
+        params.m_fall_days_1, params.m_fall_days_2,
+        params.y_emergency_pct,
     )
 
     trading_dates = _get_trading_dates(price_data)
     total_days = len(trading_dates)
 
+    phase1_sold: set[str] = set()
+
     for day_idx, date in enumerate(trading_dates):
         date_str = date.strftime("%Y-%m-%d")
 
         # ── SELL Phase ──
-        codes_to_sell: set[str] = set()
+        codes_to_sell_all: set[str] = set()
+        codes_to_sell_partial: set[str] = set()
+
         for code in list(portfolio.holdings.keys()):
             if code not in signals:
                 continue
             sig = signals[code]
 
-            # 연속 하락 매도
-            if date in sig["sell_fall"].index and sig["sell_fall"].get(date, False):
-                codes_to_sell.add(code)
-            # 긴급 매도
-            elif date in sig["sell_emergency"].index and sig["sell_emergency"].get(date, False):
-                codes_to_sell.add(code)
+            # 긴급 매도 (최우선)
+            if date in sig["sell_emergency"].index and sig["sell_emergency"].get(date, False):
+                codes_to_sell_all.add(code)
+                continue
 
-        for code in codes_to_sell:
+            # 2차 매도 (전량)
+            if date in sig["sell_fall_2"].index and sig["sell_fall_2"].get(date, False):
+                codes_to_sell_all.add(code)
+                continue
+
+            # 1차 매도 (부분) — 아직 1차 미실행인 경우만
+            if code not in phase1_sold:
+                if date in sig["sell_fall_1"].index and sig["sell_fall_1"].get(date, False):
+                    codes_to_sell_partial.add(code)
+                    continue
+
+            # 1차 시그널이 꺼지면(연속 하락 끊김) phase1_sold 리셋
+            if code in phase1_sold:
+                is_still_falling = (
+                    date in sig["sell_fall_1"].index
+                    and sig["sell_fall_1"].get(date, False)
+                )
+                if not is_still_falling:
+                    phase1_sold.discard(code)
+
+        # 전량 매도 실행
+        for code in codes_to_sell_all:
             if code not in price_data or date not in price_data[code].index:
                 continue
             price = price_data[code].loc[date, "Close"]
@@ -196,6 +225,41 @@ def run_backtest(
             holding = portfolio.holdings.get(code)
             avg_price = holding.avg_price if holding else price
             if portfolio.sell_all(date_str, code, name, price):
+                phase1_sold.discard(code)
+                if event_callback:
+                    profit_pct = round((price - avg_price) / avg_price * 100, 1) if avg_price > 0 else 0.0
+                    event_callback({
+                        "type": "trade",
+                        "side": "SELL",
+                        "date": date_str,
+                        "name": name,
+                        "code": code,
+                        "price": price,
+                        "profit_pct": profit_pct,
+                    })
+
+        # 1차 부분 매도 실행
+        for code in codes_to_sell_partial:
+            if code in codes_to_sell_all:
+                continue
+            if code not in price_data or date not in price_data[code].index:
+                continue
+            price = price_data[code].loc[date, "Close"]
+            name = name_map.get(code, code)
+            holding = portfolio.holdings.get(code)
+            if not holding:
+                continue
+
+            # 소액 스킵 조건
+            position_value = holding.quantity * price
+            threshold = params.max_buy_amount * params.sell_ratio_1 / 100
+            if position_value <= threshold:
+                phase1_sold.add(code)
+                continue
+
+            avg_price = holding.avg_price
+            if portfolio.sell_partial(date_str, code, name, price, params.sell_ratio_1):
+                phase1_sold.add(code)
                 if event_callback:
                     profit_pct = round((price - avg_price) / avg_price * 100, 1) if avg_price > 0 else 0.0
                     event_callback({

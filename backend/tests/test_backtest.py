@@ -41,7 +41,9 @@ class TestRunBacktest:
             end_date="2024-01-15",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -69,7 +71,9 @@ class TestRunBacktest:
             end_date="2024-01-08",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -93,7 +97,9 @@ class TestRunBacktest:
             end_date="2024-01-08",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -123,7 +129,9 @@ class TestRunBacktest:
             end_date="2024-01-08",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -150,7 +158,9 @@ class TestRunBacktest:
             end_date="2024-01-15",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -173,7 +183,9 @@ class TestRunBacktest:
             end_date="2024-01-12",
             fee_rate=0.015,
             n_rise_days=3,
-            m_fall_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
             y_emergency_pct=5.0,
             max_buy_amount=5_000_000,
             min_balance=1_000_000,
@@ -196,5 +208,152 @@ class TestRunBacktest:
         assert "current" in p
         assert "total" in p
         assert "date" in p
+
+
+class TestMultiStageSell:
+    def test_phase1_partial_sell(self):
+        """1차 기간 도달 시 sell_ratio_1% 부분 매도."""
+        # 3일 상승 → 3일 하락 (1차), 총 7일 데이터
+        prices = [100, 101, 102, 103, 102, 101, 100]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-12",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        assert len(sell_trades) == 1  # 1차 부분 매도만 발생
+        buy_trade = [t for t in result.trades if t.side == "BUY"][0]
+        expected_sold = round(buy_trade.quantity * 50 / 100)
+        assert sell_trades[0].quantity == expected_sold
+
+    def test_phase2_full_sell(self):
+        """2차 기간 도달 시 남은 수량 전량 매도."""
+        # 3일 상승 → 5일 연속 하락 (1차+2차)
+        prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-15",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        assert len(sell_trades) == 2  # 1차 부분 + 2차 전량
+
+    def test_phase1_skip_small_position(self):
+        """보유 평가액이 threshold 이하면 1차 매도 스킵."""
+        # 소액 포지션: 잔고 제한으로 소량만 매수 → threshold보다 작아 1차 스킵
+        # initial_cash=1_100_000, min_balance=1_000_000 → 매수 가능 금액 ~100,000
+        # max_buy_amount=5_000_000, sell_ratio_1=50 → threshold=2,500,000
+        # 매수 수량 = floor(100000/103) = 970주, 평가액 = 970*100 = 97,000 < 2,500,000
+        prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=1_100_000,
+            start_date="2024-01-01",
+            end_date="2024-01-15",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        # 1차 스킵 + 2차 전량매도 = 매도 1건
+        if len(sell_trades) > 0:
+            buy_trade = [t for t in result.trades if t.side == "BUY"][0]
+            assert sell_trades[0].quantity == buy_trade.quantity
+
+    def test_reset_after_rise(self):
+        """연속 하락이 끊기면 1차 상태가 리셋되어야 한다."""
+        # 3일 상승 → 3일 하락(1차) → 1일 상승(리셋) → 3일 하락(다시 1차)
+        # sell_ratio_1=25로 설정하여 1차 매도 후 남은 포지션이
+        # threshold(max_buy_amount*25/100=1,250,000)를 초과하도록 함
+        prices = [100, 101, 102, 103, 102, 101, 100, 101, 100, 99, 98]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-18",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=25,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        # 1차 매도 2회 (리셋 후 다시 발동)
+        assert len(sell_trades) >= 2
+
+    def test_emergency_sell_overrides_multi_stage(self):
+        """긴급 손절은 다단계 매도 상태와 관계없이 전량 매도."""
+        # 3일 상승 → 3일 하락(1차) → 급락(-10%)
+        prices = [100, 101, 102, 103, 102, 101, 100, 88]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-15",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=50,
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        # 최종적으로 보유 종목이 없어야 함 (긴급 손절로 전량 매도)
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        total_sold = sum(t.quantity for t in sell_trades)
+        buy_qty = sum(t.quantity for t in result.trades if t.side == "BUY")
+        assert total_sold == buy_qty
 
 
