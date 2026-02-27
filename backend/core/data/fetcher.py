@@ -96,7 +96,7 @@ def _save_listing_to_db(df: pd.DataFrame) -> None:
         )
 
 
-def fetch_price_data(code: str, start: str, end: str, username: str = "") -> pd.DataFrame:
+def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
     """개별 종목의 일별 가격 데이터를 반환한다. DB를 우선 확인한다."""
     df = _price_from_db(code, start, end)
     if df is not None and not df.empty:
@@ -111,13 +111,13 @@ def fetch_price_data(code: str, start: str, end: str, username: str = "") -> pd.
 
 def fetch_all_prices(
     codes: list[str], start: str, end: str,
-    progress_callback=None, username: str = "",
+    progress_callback=None,
 ) -> dict[str, pd.DataFrame]:
     """여러 종목의 가격 데이터를 딕셔너리로 반환한다."""
     result: dict[str, pd.DataFrame] = {}
     for i, code in enumerate(codes):
         try:
-            df = fetch_price_data(code, start, end, username=username)
+            df = fetch_price_data(code, start, end)
             if df is not None and not df.empty:
                 result[code] = df
         except Exception as e:
@@ -127,7 +127,7 @@ def fetch_all_prices(
     return result
 
 
-def fetch_kospi_index(start: str, end: str, username: str = "") -> pd.DataFrame:
+def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
     """KOSPI 지수(KS11) 데이터를 반환한다."""
     df = _price_from_db("KS11", start, end)
     if df is not None and not df.empty:

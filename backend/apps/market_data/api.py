@@ -16,16 +16,11 @@ def list_stocks(request, market: str, limit: int = 100):
     if df is None or df.empty:
         return []
 
-    if market.upper() == "KOSPI":
-        code_col, cap_col = "Code", "Marcap"
-    else:
-        code_col, cap_col = "Symbol", "MarketCap"
-
     records = []
     for _, row in df.head(limit).iterrows():
         records.append({
-            "code": row.get(code_col, ""),
+            "code": row.get("Code", ""),
             "name": row.get("Name", ""),
-            "market_cap": int(row.get(cap_col, 0)) if row.get(cap_col) else None,
+            "market_cap": int(row.get("Marcap", 0)) if row.get("Marcap") else None,
         })
     return records
