@@ -27,7 +27,9 @@ const schema = z.object({
   end_date: z.string().min(1, "종료일 필수"),
   fee_rate: z.coerce.number().min(0).max(1),
   n_rise_days: z.coerce.number().int().min(1).max(20),
-  m_fall_days: z.coerce.number().int().min(1).max(20),
+  m_fall_days_1: z.coerce.number().int().min(1).max(20),
+  m_fall_days_2: z.coerce.number().int().min(2).max(30),
+  sell_ratio_1: z.coerce.number().int().min(10).max(90),
   y_emergency_pct: z.coerce.number().min(0.1).max(50),
   max_buy_amount: z.coerce.number().min(100_000),
   min_balance: z.coerce.number().min(0),
@@ -35,6 +37,9 @@ const schema = z.object({
 }).refine((data) => new Date(data.start_date) < new Date(data.end_date), {
   message: "종료일은 시작일보다 이후여야 합니다",
   path: ["end_date"],
+}).refine((data) => data.m_fall_days_2 > data.m_fall_days_1, {
+  message: "2차 매도 기간은 1차보다 커야 합니다",
+  path: ["m_fall_days_2"],
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -58,7 +63,9 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
       end_date: toDateStr(today),
       fee_rate: 0.015,
       n_rise_days: 3,
-      m_fall_days: 3,
+      m_fall_days_1: 3,
+      m_fall_days_2: 5,
+      sell_ratio_1: 50,
       y_emergency_pct: 5.0,
       max_buy_amount: 5_000_000,
       min_balance: 1_000_000,
@@ -143,15 +150,42 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
             />
           </div>
           <div>
-            <Label htmlFor="m_fall_days" className={labelClass}>연속 하락일 (매도 신호)</Label>
+            <Label htmlFor="m_fall_days_1" className={labelClass}>1차 매도 연속 하락일</Label>
             <Input
-              id="m_fall_days"
+              id="m_fall_days_1"
               type="number"
               min={1}
               max={20}
               className={inputClass}
-              {...register("m_fall_days")}
+              {...register("m_fall_days_1")}
             />
+          </div>
+          <div>
+            <Label htmlFor="sell_ratio_1" className={labelClass}>1차 매도 비율 (%)</Label>
+            <Input
+              id="sell_ratio_1"
+              type="number"
+              min={10}
+              max={90}
+              className={inputClass}
+              {...register("sell_ratio_1")}
+            />
+          </div>
+          <div>
+            <Label htmlFor="m_fall_days_2" className={labelClass}>2차 매도 연속 하락일 (전량)</Label>
+            <Input
+              id="m_fall_days_2"
+              type="number"
+              min={2}
+              max={30}
+              className={inputClass}
+              {...register("m_fall_days_2")}
+            />
+            {errors.m_fall_days_2 && (
+              <p className="mt-1 text-xs text-destructive">
+                {errors.m_fall_days_2.message}
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="y_emergency_pct" className={labelClass}>긴급 손절 기준 (%)</Label>

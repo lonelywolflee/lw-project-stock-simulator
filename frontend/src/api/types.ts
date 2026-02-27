@@ -6,7 +6,9 @@ export interface BacktestParams {
   end_date: string;
   fee_rate: number;
   n_rise_days: number;
-  m_fall_days: number;
+  m_fall_days_1: number;
+  m_fall_days_2: number;
+  sell_ratio_1: number;
   y_emergency_pct: number;
   max_buy_amount: number;
   min_balance: number;
