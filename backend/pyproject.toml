@@ -10,7 +10,7 @@ dependencies = [
     "finance-datareader",
     "pandas",
     "numpy",
-    "pyarrow",
+
     "python-dotenv>=1.0",
     "django-unfold>=0.81.0",
 ]

@@ -22,7 +22,7 @@
 |------|------|
 | 백테스트 시뮬레이션 | 파라미터 기반 추세 매매 전략 백테스트 실행 |
 | 결과 시각화 | 자산 변동 차트, 벤치마크 비교, 거래 내역 테이블, 핵심 지표 카드 (수익률 · MDD · 승률 · 수수료) |
-| 시장 데이터 수집 | KOSPI 종목의 과거 OHLCV 데이터 수집 및 Parquet 캐싱 |
+| 시장 데이터 수집 | KOSPI 종목의 과거 OHLCV 데이터 수집 및 DB 저장 |
 | 종목 목록 조회 | KOSPI 상장 종목 목록 조회 API (시가총액 포함) |
 | 실거래 연동 | 한국투자증권 API를 통한 실제 매매 실행 (예정) |
 
@@ -38,7 +38,7 @@ sequenceDiagram
     User->>FE: 파라미터 입력 (기간, 자금, 전략 설정)
     FE->>FE: 폼 검증
     FE->>BE: API 호출
-    BE->>BE: 시장 데이터 수집/캐싱
+    BE->>BE: 시장 데이터 수집 (DB 우선 조회)
     BE->>Engine: 시그널 사전 계산
     Engine->>Engine: 일별 매매 시뮬레이션 (SELL → BUY → SNAPSHOT)
     Engine-->>BE: 시뮬레이션 결과
@@ -61,7 +61,6 @@ sequenceDiagram
 | django-cors-headers | 4.4 | CORS 정책 관리 |
 | FinanceDataReader | latest | 주가 · 시가총액 데이터 수집 |
 | Pandas / NumPy | latest | 데이터 분석, 시뮬레이션 연산 |
-| PyArrow | latest | 고속 데이터 캐싱 (Parquet) |
 | python-dotenv | 1.0 | 환경 변수 관리 |
 | uv | latest | 패키지 · 프로젝트 관리 |
 
@@ -86,7 +85,7 @@ sequenceDiagram
 | 기술 | 용도 |
 |------|------|
 | Docker Compose | 로컬 개발 환경 오케스트레이션 |
-| SQLite | 계정 관리, 거래 종목 관리 (예정) |
+| SQLite | 계정 관리, 시장 데이터 저장, 거래 종목 관리 (예정) |
 
 ## Data Flow
 
@@ -97,7 +96,7 @@ sequenceDiagram
     participant FE as Frontend<br/>useRunBacktest()
     participant API as Backend API<br/>api.py
     participant Fetcher as fetcher.py
-    participant Cache as cache.py
+    participant DB as SQLite<br/>Django ORM
     participant FDR as FinanceDataReader
     participant BT as backtest.py
     participant Sig as signals.py
@@ -108,16 +107,17 @@ sequenceDiagram
     rect rgb(230, 240, 255)
         Note over API,FDR: 1. 데이터 로딩
         API->>Fetcher: fetch_stock_listing()
-        API->>Fetcher: fetch_all_prices()
-        API->>Fetcher: fetch_kospi_index()
-        Fetcher->>Cache: load_from_cache()
-        alt 캐시 히트
-            Cache-->>Fetcher: Parquet 반환
-        else 캐시 미스
+        Note over Fetcher,DB: BatchMeta로 오늘 배치 여부 확인
+        Fetcher->>DB: DB 조회
+        alt DB 히트
+            DB-->>Fetcher: DataFrame 반환
+        else DB 미스
             Fetcher->>FDR: DataReader()
             FDR-->>Fetcher: 데이터
-            Fetcher->>Cache: save_to_cache()
+            Fetcher->>DB: bulk_create / update
         end
+        API->>Fetcher: fetch_all_prices()
+        API->>Fetcher: fetch_kospi_index()
         Fetcher-->>API: 종목 목록 + 가격 데이터 + 지수
     end
 
@@ -146,13 +146,16 @@ sequenceDiagram
 ```
 api.run()
 ├── fetch_stock_listing("KOSPI")
+│   ├── BatchMeta 확인 (오늘 배치 여부)
+│   ├── _listing_from_db() 또는 fdr.StockListing()
+│   └── _save_listing_to_db() → BatchMeta 갱신
 ├── fetch_all_prices(codes, start, end)
 │   └── fetch_price_data(code, start, end)  # 종목별
-│       ├── load_from_cache(code, start, end)
-│       └── fdr.DataReader() → save_to_cache()
+│       ├── _price_from_db(code, start, end)
+│       └── fdr.DataReader() → _save_price_to_db()
 ├── fetch_kospi_index()
-│   ├── load_from_cache()
-│   └── fdr.DataReader() → save_to_cache()
+│   ├── _price_from_db("KS11", start, end)
+│   └── fdr.DataReader() → _save_price_to_db()
 ├── run_backtest(params, price_data, listing_df, index_df)
 │   ├── _precompute_signals(price_data, n, m, y)
 │   │   ├── detect_consecutive_rises(close, n)
@@ -166,14 +169,14 @@ api.run()
 └── serialize_result(result) → JSON 응답
 ```
 
-### 데이터 캐싱
+### 데이터 저장 전략
 
-`fetcher.py`의 모든 데이터 수집 함수(`fetch_price_data`, `fetch_kospi_index`)는 `cache.py`를 통해 동일한 캐싱 전략을 사용한다.
+`fetcher.py`의 모든 데이터 수집 함수는 DB 우선 조회 후 미스 시 네트워크 fetch → DB 저장 패턴을 사용한다.
 
-- **캐시 키**: `{종목코드}_{시작일}_{종료일}` (예: `005930_2024-01-01_2024-12-31.parquet`)
-- **저장 형식**: Apache Parquet (PyArrow)
-- **저장 위치**: 프로젝트 루트의 `.cache/` 디렉토리
-- **캐시 정책**: 동일 종목·동일 기간 요청 시 캐시 히트, 기간이 다르면 미스 (기간 단위 exact match)
+- **종목 목록**: `BatchMeta` 테이블로 하루 1회 배치 관리. 오늘 이미 fetch 했으면 DB 조회, 아니면 네트워크 fetch 후 DB upsert
+- **일별 가격**: `StockDailyPrice` 테이블에 (code, date) 유니크 키로 저장. 요청 기간의 데이터가 DB에 완전히 있으면 DB 반환, 불완전하면 네트워크 fetch
+- **KOSPI 지수**: 가격 데이터와 동일 테이블에 `is_index=True`로 구분하여 저장
+- **fallback**: 종목 목록은 네트워크 실패 시 기존 DB 데이터 사용. 가격 데이터는 실패 시 예외 (시뮬레이션 불가)
 - **네트워크 장애 대응**: `_retry()` 함수가 지수 백오프(1s → 2s → 4s)로 최대 3회 재시도
 
 ## Project Structure
@@ -183,13 +186,13 @@ lw-project-stock-simulator/
 ├── backend/                          # Django 백엔드 서비스
 │   ├── apps/                         # Django 앱 모음
 │   │   ├── backtests/                # 백테스트 API (api.py, schemas.py, serializers.py)
-│   │   └── market_data/              # 시장 데이터 API (api.py, schemas.py)
+│   │   └── market_data/              # 시장 데이터 (models.py, api.py, schemas.py, admin.py)
 │   ├── config/                       # Django 프로젝트 설정
 │   │   ├── settings/                 # 환경별 설정 (base.py)
 │   │   ├── urls.py                   # URL 라우팅
 │   │   └── wsgi.py                   # WSGI 엔트리포인트
 │   ├── core/                         # 핵심 비즈니스 로직 (Django 비의존)
-│   │   ├── data/                     # 데이터 수집·캐싱 (fetcher.py, cache.py)
+│   │   ├── data/                     # 데이터 수집 (fetcher.py)
 │   │   └── engine/                   # 매매 엔진 (backtest.py, portfolio.py, signals.py)
 │   ├── tests/                        # 백엔드 테스트
 │   ├── manage.py                     # Django CLI
@@ -237,11 +240,11 @@ lw-project-stock-simulator/
 | `core/engine/backtest.py` | 일별 루프 기반 백테스트 시뮬레이션 실행 및 결과·지표 산출 |
 | `core/engine/signals.py` | 종가 시리즈로부터 연속 상승·연속 하락·급락 매매 시그널을 감지하는 순수 함수 |
 | `core/engine/portfolio.py` | 현금·보유종목·거래내역·일별 스냅샷 등 포트폴리오 상태 관리 및 매수·매도 실행 |
-| `core/data/fetcher.py` | FinanceDataReader를 래핑하여 종목 가격·지수 데이터를 수집하고 캐시를 우선 조회 |
-| `core/data/cache.py` | 종목코드·기간 기반 키로 DataFrame을 Parquet 파일로 저장·로드하는 로컬 캐시 |
+| `core/data/fetcher.py` | FinanceDataReader를 래핑하여 종목 가격·지수 데이터를 수집하고 DB를 우선 조회 |
 | `apps/backtests/api.py` | 백테스트 실행 POST 엔드포인트 — 데이터 수집·엔진 실행·결과 직렬화를 오케스트레이션 |
 | `apps/backtests/schemas.py` | 백테스트 API 요청 파라미터와 응답 결과의 Pydantic(ninja) 스키마 정의 |
 | `apps/backtests/serializers.py` | BacktestResult 데이터클래스를 JSON 직렬화 가능한 dict로 변환 |
+| `apps/market_data/models.py` | 시장 데이터 Django 모델 (BatchMeta, StockListing, StockDailyPrice) |
 | `apps/market_data/api.py` | 상장 종목 목록 조회 GET 엔드포인트 (KOSPI 시가총액 포함) |
 | `apps/market_data/schemas.py` | 종목 목록 응답의 Pydantic(ninja) 스키마 정의 |
 
@@ -267,7 +270,6 @@ lw-project-stock-simulator/
 | `frontend` | `frontend/Dockerfile` (`node:20-alpine`) | 5173 | Vite 개발 서버 |
 
 - `frontend`는 `backend`에 의존한다 (`depends_on`)
-- 백엔드 캐시 데이터는 `backend_cache` 볼륨으로 영속화 (`/app/.cache`)
 - 개발 시 소스 바인드 마운트: `backend` → `./backend:/app`, `frontend` → `./frontend/src:/app/src`
 
 ### Dockerfile 빌드 과정
