@@ -57,14 +57,14 @@ export interface SSEPhaseEvent {
 }
 
 export interface SSEProgressEvent {
-  phase: number;
+  phase?: number;
   current: number;
   total: number;
-  message: string;
+  message?: string;
+  date?: string;
 }
 
 export interface SSETradeEvent {
-  phase: number;
   date: string;
   side: "BUY" | "SELL";
   name: string;

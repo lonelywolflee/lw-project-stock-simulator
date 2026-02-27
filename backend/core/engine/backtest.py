@@ -252,7 +252,7 @@ def run_backtest(
                 current_prices[code] = price_data[code].loc[date, "Close"]
         portfolio.snapshot(date_str, current_prices)
 
-        if event_callback:
+        if event_callback and ((day_idx + 1) % 10 == 0 or day_idx + 1 == total_days):
             event_callback({
                 "type": "progress",
                 "current": day_idx + 1,

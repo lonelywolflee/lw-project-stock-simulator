@@ -38,7 +38,11 @@ export async function streamBacktest(
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-  const reader = response.body!.getReader();
+  if (!response.body) {
+    throw new Error("ReadableStream not supported");
+  }
+
+  const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 

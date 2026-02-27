@@ -97,7 +97,7 @@ export function useBacktestStream() {
               break;
 
             case "progress":
-              updateLastProgress(event.data.message, {
+              updateLastProgress(event.data.message ?? event.data.date ?? "", {
                 current: event.data.current,
                 total: event.data.total,
               });
