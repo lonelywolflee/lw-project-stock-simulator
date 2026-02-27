@@ -29,7 +29,7 @@ const schema = z.object({
   n_rise_days: z.coerce.number().int().min(1).max(20),
   m_fall_days_1: z.coerce.number().int().min(1).max(20),
   m_fall_days_2: z.coerce.number().int().min(2).max(30),
-  sell_ratio_1: z.coerce.number().int().min(10).max(90),
+  sell_ratio_1: z.coerce.number().int().min(0).max(90),
   y_emergency_pct: z.coerce.number().min(0.1).max(50),
   max_buy_amount: z.coerce.number().min(100_000),
   min_balance: z.coerce.number().min(0),
@@ -161,11 +161,11 @@ export function BacktestForm({ onSubmit, isLoading }: BacktestFormProps) {
             />
           </div>
           <div>
-            <Label htmlFor="sell_ratio_1" className={labelClass}>1차 매도 비율 (%)</Label>
+            <Label htmlFor="sell_ratio_1" className={labelClass}>1차 매도 비율 (%, 0=비활성)</Label>
             <Input
               id="sell_ratio_1"
               type="number"
-              min={10}
+              min={0}
               max={90}
               className={inputClass}
               {...register("sell_ratio_1")}

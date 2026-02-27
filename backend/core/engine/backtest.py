@@ -201,8 +201,8 @@ def run_backtest(
                 codes_to_sell_all.add(code)
                 continue
 
-            # 1차 매도 (부분) — 아직 1차 미실행인 경우만
-            if code not in phase1_sold:
+            # 1차 매도 (부분) — sell_ratio_1 > 0이고 아직 1차 미실행인 경우만
+            if params.sell_ratio_1 > 0 and code not in phase1_sold:
                 if date in sig["sell_fall_1"].index and sig["sell_fall_1"].get(date, False):
                     codes_to_sell_partial.add(code)
                     continue

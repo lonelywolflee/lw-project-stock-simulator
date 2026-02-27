@@ -356,4 +356,33 @@ class TestMultiStageSell:
         buy_qty = sum(t.quantity for t in result.trades if t.side == "BUY")
         assert total_sold == buy_qty
 
+    def test_sell_ratio_zero_skips_phase1(self):
+        """sell_ratio_1=0이면 1차 매도 없이 2차에서 바로 전량 매도."""
+        # 3일 상승 → 5일 연속 하락
+        prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
+        price_data = {"A": _make_price_df(prices)}
+        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+
+        params = BacktestParams(
+            initial_cash=10_000_000,
+            start_date="2024-01-01",
+            end_date="2024-01-15",
+            fee_rate=0.015,
+            n_rise_days=3,
+            m_fall_days_1=3,
+            m_fall_days_2=5,
+            sell_ratio_1=0,  # 1차 비활성화
+            y_emergency_pct=5.0,
+            max_buy_amount=5_000_000,
+            min_balance=1_000_000,
+        )
+
+        result = run_backtest(params, price_data, listing)
+
+        sell_trades = [t for t in result.trades if t.side == "SELL"]
+        # 1차 없이 2차 전량 매도 1건만 발생
+        assert len(sell_trades) == 1
+        buy_trade = [t for t in result.trades if t.side == "BUY"][0]
+        assert sell_trades[0].quantity == buy_trade.quantity
+
 
