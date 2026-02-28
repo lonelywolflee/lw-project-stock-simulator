@@ -179,6 +179,19 @@ api.run()
 - **fallback**: 종목 목록은 네트워크 실패 시 기존 DB 데이터 사용. 가격 데이터는 실패 시 예외 (시뮬레이션 불가)
 - **네트워크 장애 대응**: `_retry()` 함수가 지수 백오프(1s → 2s → 4s)로 최대 3회 재시도
 
+## Backend Layer Rules
+
+```
+config/  ← 외부 의존성 없음 (Django URL 라우팅만 apps 참조 허용)
+core/    ← config만 의존. 순수 함수 + 콜백 수신. apps/django 모델 import 금지
+apps/    ← config, core 의존. DB 접근·서비스 오케스트레이션 담당
+```
+
+1. **함수형 프로그래밍** — 외부 호출(네트워크, DB) 외에는 멱등성을 가진 순수 함수로 구현
+2. **의존성 방향** — `config → core → apps` 단방향. 역방향 의존 금지
+3. **1급 시민 함수** — DB 접근 등 부수 효과는 콜백으로 주입하여 core의 순수성 유지
+4. **services 패턴** — `apps/*/services.py`에서 DB 콜백을 생성하고 core 함수에 주입
+
 ## Project Structure
 
 ```
@@ -186,7 +199,7 @@ lw-project-stock-simulator/
 ├── backend/                          # Django 백엔드 서비스
 │   ├── apps/                         # Django 앱 모음
 │   │   ├── backtests/                # 백테스트 API (api.py, schemas.py, serializers.py)
-│   │   └── market_data/              # 시장 데이터 (models.py, api.py, schemas.py, admin.py)
+│   │   └── market_data/              # 시장 데이터 (models.py, services.py, api.py, schemas.py, admin.py)
 │   ├── config/                       # Django 프로젝트 설정
 │   │   ├── settings/                 # 환경별 설정 (base.py)
 │   │   ├── urls.py                   # URL 라우팅
@@ -240,11 +253,12 @@ lw-project-stock-simulator/
 | `core/engine/backtest.py` | 일별 루프 기반 백테스트 시뮬레이션 실행 및 결과·지표 산출 |
 | `core/engine/signals.py` | 종가 시리즈로부터 연속 상승·연속 하락·급락 매매 시그널을 감지하는 순수 함수 |
 | `core/engine/portfolio.py` | 현금·보유종목·거래내역·일별 스냅샷 등 포트폴리오 상태 관리 및 매수·매도 실행 |
-| `core/data/fetcher.py` | FinanceDataReader를 래핑하여 종목 가격·지수 데이터를 수집하고 DB를 우선 조회 |
+| `core/data/fetcher.py` | FinanceDataReader를 래핑하여 종목 가격·지수 데이터를 수집하는 순수 함수 (DB 콜백 주입) |
 | `apps/backtests/api.py` | 백테스트 실행 POST 엔드포인트 — 데이터 수집·엔진 실행·결과 직렬화를 오케스트레이션 |
 | `apps/backtests/schemas.py` | 백테스트 API 요청 파라미터와 응답 결과의 Pydantic(ninja) 스키마 정의 |
 | `apps/backtests/serializers.py` | BacktestResult 데이터클래스를 JSON 직렬화 가능한 dict로 변환 |
 | `apps/market_data/models.py` | 시장 데이터 Django 모델 (BatchMeta, StockListing, StockDailyPrice) |
+| `apps/market_data/services.py` | DB 콜백 + core fetcher 조합 — 종목 목록/가격 데이터 DB 우선 조회 서비스 |
 | `apps/market_data/api.py` | 상장 종목 목록 조회 GET 엔드포인트 (KOSPI 시가총액 포함) |
 | `apps/market_data/schemas.py` | 종목 목록 응답의 Pydantic(ninja) 스키마 정의 |
 
