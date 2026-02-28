@@ -8,7 +8,7 @@ import time
 from django.http import StreamingHttpResponse
 from ninja import Router
 
-from core.data.fetcher import (
+from apps.market_data.services import (
     fetch_all_prices,
     fetch_kospi_index,
     fetch_stock_listing,

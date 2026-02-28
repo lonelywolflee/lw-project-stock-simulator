@@ -1,11 +1,11 @@
 """FinanceDataReader 래퍼 모듈 - 주가 및 지수 데이터 수집.
 
-DB 우선 조회 후 미스 시 네트워크 fetch -> DB 저장.
+순수 데이터 수집 로직만 담당한다. DB 접근은 콜백으로 주입받는다.
 """
 
-import datetime
 import logging
 import time
+from collections.abc import Callable
 
 import FinanceDataReader as fdr
 import pandas as pd
@@ -29,99 +29,78 @@ def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
             time.sleep(delay)
 
 
-def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
+def fetch_stock_listing(
+    market: str = "KOSPI",
+    *,
+    is_batch_done: Callable[[], bool] | None = None,
+    load_listing: Callable[[], pd.DataFrame | None] | None = None,
+    save_listing: Callable[[pd.DataFrame], None] | None = None,
+    mark_batch_done: Callable[[], None] | None = None,
+) -> pd.DataFrame:
     """상장 종목 목록을 반환한다.
 
-    1. BatchMeta에서 오늘 fetch 했는지 확인
-    2. 오늘 이미 fetch -> DB에서 조회
-    3. fetch 안 함 -> FinanceDataReader 호출 -> DB 저장 -> BatchMeta 갱신
-    4. 네트워크 실패 -> DB 기존 데이터 사용 (없으면 예외)
+    1. is_batch_done()이 True면 load_listing()으로 DB 조회
+    2. 아니면 FinanceDataReader 호출 → save_listing() → mark_batch_done()
+    3. 네트워크 실패 → load_listing() fallback (없으면 예외)
     """
-    from apps.market_data.models import BatchMeta
-
-    today = datetime.date.today()
-    batch = BatchMeta.objects.filter(job_name=f"{market.lower()}_listing").first()
-
-    if batch and batch.last_fetched_date == today:
-        return _listing_from_db()
+    if is_batch_done and is_batch_done():
+        df = load_listing() if load_listing else None
+        if df is not None and not df.empty:
+            return df
 
     try:
         df = _retry(fdr.StockListing, market)
-        _save_listing_to_db(df)
-        BatchMeta.objects.update_or_create(
-            job_name=f"{market.lower()}_listing",
-            defaults={"last_fetched_date": today},
-        )
+        if save_listing:
+            save_listing(df)
+        if mark_batch_done:
+            mark_batch_done()
         return df
     except Exception:
-        logger.warning("종목 목록 fetch 실패, DB fallback 시도")
-        df = _listing_from_db()
-        if df.empty:
-            raise
-        return df
+        logger.warning("종목 목록 fetch 실패, fallback 시도")
+        df = load_listing() if load_listing else None
+        if df is not None and not df.empty:
+            return df
+        raise
 
 
-def _listing_from_db() -> pd.DataFrame:
-    """DB에서 종목 목록을 DataFrame으로 반환한다."""
-    from apps.market_data.models import StockListing
+def fetch_price_data(
+    code: str, start: str, end: str,
+    *,
+    load_price: Callable[[str, str, str], pd.DataFrame | None] | None = None,
+    save_price: Callable[[str, pd.DataFrame, bool], None] | None = None,
+) -> pd.DataFrame:
+    """개별 종목의 일별 가격 데이터를 반환한다.
 
-    records = list(StockListing.objects.all().values("code", "name", "market_cap"))
-    if not records:
-        return pd.DataFrame(columns=["Code", "Name", "Marcap"])
-    return pd.DataFrame({
-        "Code": [r["code"] for r in records],
-        "Name": [r["name"] for r in records],
-        "Marcap": [r["market_cap"] for r in records],
-    })
-
-
-def _save_listing_to_db(df: pd.DataFrame) -> None:
-    """종목 목록 DataFrame을 DB에 벌크 upsert한다."""
-    from apps.market_data.models import StockListing
-
-    code_col = "Code" if "Code" in df.columns else "Symbol"
-    cap_col = "Marcap" if "Marcap" in df.columns else "MarketCap"
-
-    objects = []
-    for _, row in df.iterrows():
-        code = row.get(code_col, "")
-        if not code:
-            continue
-        objects.append(StockListing(
-            code=code,
-            name=row.get("Name", ""),
-            market_cap=int(row.get(cap_col, 0)) if row.get(cap_col) else None,
-        ))
-    StockListing.objects.bulk_create(
-        objects,
-        update_conflicts=True,
-        unique_fields=["code"],
-        update_fields=["name", "market_cap"],
-    )
-
-
-def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
-    """개별 종목의 일별 가격 데이터를 반환한다. DB를 우선 확인한다."""
-    df = _price_from_db(code, start, end)
-    if df is not None and not df.empty:
-        return df
+    load_price로 저장소 조회 후 미스 시 네트워크 fetch → save_price로 저장.
+    """
+    if load_price:
+        df = load_price(code, start, end)
+        if df is not None and not df.empty:
+            return df
 
     df = _retry(fdr.DataReader, code, start, end)
     if df is not None and not df.empty:
-        _save_price_to_db(code, df, is_index=False)
+        if save_price:
+            save_price(code, df, False)
         return df
     raise ValueError(f"{code} 가격 데이터를 가져올 수 없습니다 ({start}~{end})")
 
 
 def fetch_all_prices(
     codes: list[str], start: str, end: str,
-    progress_callback=None,
+    *,
+    progress_callback: Callable[[int, int], None] | None = None,
+    load_price: Callable[[str, str, str], pd.DataFrame | None] | None = None,
+    save_price: Callable[[str, pd.DataFrame, bool], None] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """여러 종목의 가격 데이터를 딕셔너리로 반환한다."""
     result: dict[str, pd.DataFrame] = {}
     for i, code in enumerate(codes):
         try:
-            df = fetch_price_data(code, start, end)
+            df = fetch_price_data(
+                code, start, end,
+                load_price=load_price, save_price=save_price,
+            )
             if df is not None and not df.empty:
                 result[code] = df
         except Exception as e:
@@ -131,59 +110,21 @@ def fetch_all_prices(
     return result
 
 
-def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
+def fetch_kospi_index(
+    start: str, end: str,
+    *,
+    load_price: Callable[[str, str, str], pd.DataFrame | None] | None = None,
+    save_price: Callable[[str, pd.DataFrame, bool], None] | None = None,
+) -> pd.DataFrame:
     """KOSPI 지수(KS11) 데이터를 반환한다."""
-    df = _price_from_db("KS11", start, end)
-    if df is not None and not df.empty:
-        return df
+    if load_price:
+        df = load_price("KS11", start, end)
+        if df is not None and not df.empty:
+            return df
 
     df = _retry(fdr.DataReader, "KS11", start, end)
     if df is not None and not df.empty:
-        _save_price_to_db("KS11", df, is_index=True)
+        if save_price:
+            save_price("KS11", df, True)
         return df
     raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
-
-
-def _price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
-    """DB에서 가격 데이터를 DataFrame으로 반환한다.
-
-    end 날짜 이후 데이터가 없으면 불완전한 데이터로 판단하여 None을 반환한다.
-    """
-    from apps.market_data.models import StockDailyPrice
-
-    records = list(
-        StockDailyPrice.objects.filter(
-            code=code, date__gte=start, date__lte=end,
-        ).order_by("date").values("date", "open", "high", "low", "close", "volume")
-    )
-    if not records:
-        return None
-
-    # end 날짜 근처 데이터가 없으면 불완전 → 네트워크 fetch 유도
-    last_date = str(records[-1]["date"])
-    if last_date < end:
-        return None
-
-    df = pd.DataFrame(records)
-    df.index = pd.to_datetime(df.pop("date"))
-    df.columns = ["Open", "High", "Low", "Close", "Volume"]
-    return df
-
-
-def _save_price_to_db(code: str, df: pd.DataFrame, is_index: bool = False) -> None:
-    """가격 DataFrame을 DB에 벌크 저장한다."""
-    from apps.market_data.models import StockDailyPrice
-
-    objects = []
-    for date, row in df.iterrows():
-        objects.append(StockDailyPrice(
-            code=code,
-            date=date.date() if hasattr(date, "date") else date,
-            open=row["Open"],
-            high=row["High"],
-            low=row["Low"],
-            close=row["Close"],
-            volume=int(row.get("Volume", 0)),
-            is_index=is_index,
-        ))
-    StockDailyPrice.objects.bulk_create(objects, ignore_conflicts=True)

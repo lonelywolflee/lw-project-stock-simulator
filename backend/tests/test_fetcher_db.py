@@ -1,4 +1,4 @@
-"""fetcher DB 연동 테스트."""
+"""시장 데이터 서비스 DB 연동 테스트."""
 
 import datetime
 
@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from apps.market_data.models import BatchMeta, StockDailyPrice, StockListing
-from core.data.fetcher import (
+from apps.market_data.services import (
     fetch_all_prices,
     fetch_kospi_index,
     fetch_price_data,
@@ -137,7 +137,7 @@ class TestFetchAllPricesDB:
 @pytest.mark.django_db
 class TestIntegrationFlow:
     def test_listing_then_price_flow(self, mocker):
-        """종목 목록 -> 가격 조회 전체 흐름."""
+        """종목 목록 → 가격 조회 전체 흐름."""
         listing_df = pd.DataFrame({
             "Code": ["005930"], "Name": ["삼성전자"], "Marcap": [500_000_000_000],
         })

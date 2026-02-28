@@ -2,7 +2,7 @@
 
 from ninja import Router
 
-from core.data.fetcher import fetch_stock_listing
+from .services import fetch_stock_listing
 
 from .schemas import StockSchema
 
