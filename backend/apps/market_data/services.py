@@ -15,7 +15,7 @@ from core.data.fetcher import (
     fetch_stock_listing as _core_fetch_stock_listing,
 )
 
-from .models import BatchMeta, StockDailyPrice, StockListing
+from .models import BatchMeta, PriceFetchCoverage, StockDailyPrice, StockListing
 
 
 # ── 종목 목록 DB 콜백 ──────────────────────────────────────────
@@ -67,6 +67,39 @@ def _mark_listing_batch_done(market: str) -> None:
 
 
 # ── 가격 데이터 DB 콜백 ────────────────────────────────────────
+
+
+def _find_uncovered_ranges(code: str, start: str, end: str) -> list[tuple[str, str]]:
+    """커버리지 테이블에서 미캐시 연속 날짜 범위를 반환한다."""
+    start_date = datetime.date.fromisoformat(start)
+    end_date = datetime.date.fromisoformat(end)
+
+    all_dates: set[datetime.date] = set()
+    current = start_date
+    while current <= end_date:
+        all_dates.add(current)
+        current += datetime.timedelta(days=1)
+
+    covered_dates = set(
+        PriceFetchCoverage.objects.filter(
+            code=code, date__gte=start_date, date__lte=end_date,
+        ).values_list("date", flat=True)
+    )
+
+    uncovered = sorted(all_dates - covered_dates)
+    if not uncovered:
+        return []
+
+    ranges: list[tuple[str, str]] = []
+    range_start = uncovered[0]
+    prev = uncovered[0]
+    for d in uncovered[1:]:
+        if (d - prev).days > 1:
+            ranges.append((str(range_start), str(prev)))
+            range_start = d
+        prev = d
+    ranges.append((str(range_start), str(prev)))
+    return ranges
 
 
 def _load_price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:

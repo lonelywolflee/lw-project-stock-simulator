@@ -5,8 +5,9 @@ import datetime
 import pandas as pd
 import pytest
 
-from apps.market_data.models import BatchMeta, StockDailyPrice, StockListing
+from apps.market_data.models import BatchMeta, PriceFetchCoverage, StockDailyPrice, StockListing
 from apps.market_data.services import (
+    _find_uncovered_ranges,
     fetch_all_prices,
     fetch_kospi_index,
     fetch_price_data,
@@ -160,3 +161,44 @@ class TestIntegrationFlow:
         # 두 번째 호출은 DB에서 가져옴 (mock이 소진되어도 OK)
         prices2 = fetch_price_data("005930", "2024-01-02", "2024-01-04")
         assert len(prices2) == 3
+
+
+@pytest.mark.django_db
+class TestFindUncoveredRanges:
+    def test_returns_full_range_when_no_coverage(self):
+        """커버리지가 없으면 전체 범위를 반환한다."""
+        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-04")
+        assert result == [("2024-01-02", "2024-01-04")]
+
+    def test_returns_empty_when_fully_covered(self):
+        """전체가 커버되면 빈 리스트를 반환한다."""
+        for day in range(2, 5):
+            PriceFetchCoverage.objects.create(
+                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+            )
+        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-04")
+        assert result == []
+
+    def test_returns_tail_range_when_partially_covered(self):
+        """앞부분만 커버되면 뒷부분만 반환한다."""
+        for day in range(2, 5):
+            PriceFetchCoverage.objects.create(
+                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+            )
+        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-06")
+        assert result == [("2024-01-05", "2024-01-06")]
+
+    def test_returns_multiple_uncovered_ranges(self):
+        """비연속적인 다중 미커버 구간을 반환한다."""
+        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 2), has_data=True)
+        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 3), has_data=True)
+        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 5), has_data=True)
+
+        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-07")
+        assert result == [("2024-01-04", "2024-01-04"), ("2024-01-06", "2024-01-07")]
+
+    def test_ignores_other_codes(self):
+        """다른 종목의 커버리지는 무시한다."""
+        PriceFetchCoverage.objects.create(code="000660", date=datetime.date(2024, 1, 2), has_data=True)
+        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-02")
+        assert result == [("2024-01-02", "2024-01-02")]
