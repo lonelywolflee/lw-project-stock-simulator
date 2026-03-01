@@ -142,7 +142,7 @@ class TestFetchPriceDataDB:
             return_value=mock_df,
         )
 
-        df1 = fetch_price_data("005930", "2024-01-02", "2024-01-03")
+        fetch_price_data("005930", "2024-01-02", "2024-01-03")
         assert mock_raw.call_count == 1
 
         df2 = fetch_price_data("005930", "2024-01-02", "2024-01-03")
@@ -226,8 +226,14 @@ class TestFetchAllPricesDB:
             code="A", date=datetime.date(2024, 1, 2),
             open=100, high=105, low=99, close=103, volume=1000,
         )
+        PriceFetchCoverage.objects.create(
+            code="A", date=datetime.date(2024, 1, 2), has_data=True,
+        )
         # B는 DB에도 없고 네트워크도 실패
-        mocker.patch("core.data.fetcher._retry", side_effect=Exception("fail"))
+        mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            side_effect=Exception("fail"),
+        )
 
         result = fetch_all_prices(["A", "B"], "2024-01-02", "2024-01-02")
 
@@ -250,7 +256,11 @@ class TestIntegrationFlow:
             "Close": [70500, 71500, 72500],
             "Volume": [10000, 12000, 11000],
         }, index=dates)
-        mocker.patch("core.data.fetcher._retry", side_effect=[listing_df, price_df])
+        mocker.patch("core.data.fetcher._retry", side_effect=[listing_df])
+        mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=price_df,
+        )
 
         listing = fetch_stock_listing("KOSPI")
         assert len(listing) == 1
@@ -258,7 +268,7 @@ class TestIntegrationFlow:
         prices = fetch_price_data("005930", "2024-01-02", "2024-01-04")
         assert len(prices) == 3
 
-        # 두 번째 호출은 DB에서 가져옴 (mock이 소진되어도 OK)
+        # 두 번째 호출은 DB에서 가져옴
         prices2 = fetch_price_data("005930", "2024-01-02", "2024-01-04")
         assert len(prices2) == 3
 

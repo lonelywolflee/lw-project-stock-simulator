@@ -5,6 +5,7 @@ core/data/fetcher.py의 순수 함수에 DB 콜백을 주입하여
 """
 
 import datetime
+import logging
 
 import pandas as pd
 
@@ -16,6 +17,8 @@ from core.data.fetcher import (
 )
 
 from .models import BatchMeta, PriceFetchCoverage, StockDailyPrice, StockListing
+
+logger = logging.getLogger(__name__)
 
 
 # ── 종목 목록 DB 콜백 ──────────────────────────────────────────
@@ -191,13 +194,18 @@ def fetch_all_prices(
     codes: list[str], start: str, end: str,
     progress_callback=None,
 ) -> dict[str, pd.DataFrame]:
-    """여러 종목의 가격 데이터를 딕셔너리로 반환한다 (DB 우선 조회)."""
-    return _core_fetch_all_prices(
-        codes, start, end,
-        progress_callback=progress_callback,
-        load_price=_load_price_from_db,
-        save_price=_save_price_to_db,
-    )
+    """여러 종목의 가격 데이터를 딕셔너리로 반환한다 (증분 캐시)."""
+    result: dict[str, pd.DataFrame] = {}
+    for i, code in enumerate(codes):
+        try:
+            df = fetch_price_data(code, start, end)
+            if df is not None and not df.empty:
+                result[code] = df
+        except Exception as e:
+            logger.warning("Failed to fetch %s: %s", code, e)
+        if progress_callback:
+            progress_callback(i + 1, len(codes))
+    return result
 
 
 def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
