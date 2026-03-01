@@ -86,6 +86,17 @@ def fetch_price_data(
     raise ValueError(f"{code} 가격 데이터를 가져올 수 없습니다 ({start}~{end})")
 
 
+def fetch_price_data_raw(code: str, start: str, end: str) -> pd.DataFrame:
+    """네트워크에서 가격 데이터를 fetch한다. 빈 결과도 허용한다.
+
+    증분 캐시의 sub-range fetch 시 사용. ValueError를 발생시키지 않는다.
+    """
+    df = _retry(fdr.DataReader, code, start, end)
+    if df is not None and not df.empty:
+        return df
+    return pd.DataFrame()
+
+
 def fetch_all_prices(
     codes: list[str], start: str, end: str,
     *,
@@ -128,3 +139,14 @@ def fetch_kospi_index(
             save_price("KS11", df, True)
         return df
     raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
+
+
+if __name__ == "__main__":
+    # df = fetch_stock_listing("KOSPI")
+    # print(df)
+    df = fetch_price_data("005930", "2024-01-02", "2024-01-04")
+    print(df)
+    # df = fetch_kospi_index("2024-01-02", "2024-01-04")
+    # print(df)
+    df = fetch_all_prices(["005930", "000660"], "2024-01-02", "2024-01-04")
+    print(df)
