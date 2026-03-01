@@ -102,6 +102,29 @@ def _find_uncovered_ranges(code: str, start: str, end: str) -> list[tuple[str, s
     return ranges
 
 
+def _save_coverage(code: str, start: str, end: str, fetched_df: pd.DataFrame) -> None:
+    """fetch한 범위의 모든 날짜에 대해 커버리지를 기록한다."""
+    start_date = datetime.date.fromisoformat(start)
+    end_date = datetime.date.fromisoformat(end)
+
+    if fetched_df is not None and not fetched_df.empty:
+        data_dates = {
+            d.date() if hasattr(d, "date") else d for d in fetched_df.index
+        }
+    else:
+        data_dates = set()
+
+    objects = []
+    current = start_date
+    while current <= end_date:
+        objects.append(PriceFetchCoverage(
+            code=code, date=current, has_data=current in data_dates,
+        ))
+        current += datetime.timedelta(days=1)
+
+    PriceFetchCoverage.objects.bulk_create(objects, ignore_conflicts=True)
+
+
 def _load_price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
     records = list(
         StockDailyPrice.objects.filter(

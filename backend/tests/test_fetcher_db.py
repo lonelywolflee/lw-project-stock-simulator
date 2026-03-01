@@ -8,6 +8,7 @@ import pytest
 from apps.market_data.models import BatchMeta, PriceFetchCoverage, StockDailyPrice, StockListing
 from apps.market_data.services import (
     _find_uncovered_ranges,
+    _save_coverage,
     fetch_all_prices,
     fetch_kospi_index,
     fetch_price_data,
@@ -202,3 +203,45 @@ class TestFindUncoveredRanges:
         PriceFetchCoverage.objects.create(code="000660", date=datetime.date(2024, 1, 2), has_data=True)
         result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-02")
         assert result == [("2024-01-02", "2024-01-02")]
+
+
+@pytest.mark.django_db
+class TestSaveCoverage:
+    def test_saves_coverage_for_all_dates(self):
+        """fetch 범위의 모든 날짜에 커버리지를 저장한다."""
+        dates = pd.to_datetime(["2024-01-02", "2024-01-04"])
+        df = pd.DataFrame({
+            "Open": [100, 103], "High": [105, 107],
+            "Low": [99, 102], "Close": [103, 106],
+            "Volume": [1000, 1200],
+        }, index=dates)
+
+        _save_coverage("005930", "2024-01-02", "2024-01-04", df)
+
+        coverages = list(
+            PriceFetchCoverage.objects.filter(code="005930")
+            .order_by("date").values_list("date", "has_data")
+        )
+        assert len(coverages) == 3
+        assert coverages[0] == (datetime.date(2024, 1, 2), True)
+        assert coverages[1] == (datetime.date(2024, 1, 3), False)  # 비거래일
+        assert coverages[2] == (datetime.date(2024, 1, 4), True)
+
+    def test_saves_all_no_data_for_empty_df(self):
+        """빈 DataFrame이면 모든 날짜를 비거래일로 기록한다."""
+        _save_coverage("005930", "2024-01-06", "2024-01-07", pd.DataFrame())
+
+        coverages = list(
+            PriceFetchCoverage.objects.filter(code="005930")
+            .order_by("date").values_list("has_data", flat=True)
+        )
+        assert coverages == [False, False]
+
+    def test_ignores_conflicts_on_duplicate(self):
+        """중복 저장 시 충돌을 무시한다."""
+        PriceFetchCoverage.objects.create(
+            code="005930", date=datetime.date(2024, 1, 2), has_data=True,
+        )
+        _save_coverage("005930", "2024-01-02", "2024-01-02", pd.DataFrame())
+
+        assert PriceFetchCoverage.objects.filter(code="005930").count() == 1
