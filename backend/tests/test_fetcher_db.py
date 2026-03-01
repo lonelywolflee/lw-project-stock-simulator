@@ -183,17 +183,39 @@ class TestFetchPriceDataDB:
 
 @pytest.mark.django_db
 class TestFetchKospiIndexDB:
-    def test_returns_db_data_when_exists(self):
-        """DB에 KS11 데이터가 있으면 반환한다."""
+    def test_returns_db_data_when_fully_covered(self):
+        """전체 커버 시 DB에서 반환한다."""
         StockDailyPrice.objects.create(
             code="KS11", date=datetime.date(2024, 1, 2),
             open=2500, high=2520, low=2490, close=2510, volume=0, is_index=True,
+        )
+        PriceFetchCoverage.objects.create(
+            code="KS11", date=datetime.date(2024, 1, 2), has_data=True,
         )
 
         df = fetch_kospi_index("2024-01-02", "2024-01-02")
 
         assert len(df) == 1
         assert df.iloc[0]["Close"] == 2510
+
+    def test_second_call_uses_cache(self, mocker):
+        """두 번째 동일 호출은 캐시에서 반환한다."""
+        dates = pd.to_datetime(["2024-01-02"])
+        mock_df = pd.DataFrame({
+            "Open": [2500], "High": [2520],
+            "Low": [2490], "Close": [2510],
+            "Volume": [0],
+        }, index=dates)
+        mock_raw = mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=mock_df,
+        )
+
+        fetch_kospi_index("2024-01-02", "2024-01-02")
+        assert mock_raw.call_count == 1
+
+        fetch_kospi_index("2024-01-02", "2024-01-02")
+        assert mock_raw.call_count == 1  # 추가 호출 없음
 
 
 @pytest.mark.django_db

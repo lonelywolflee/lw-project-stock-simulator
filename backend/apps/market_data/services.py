@@ -10,7 +10,6 @@ import pandas as pd
 
 from core.data.fetcher import (
     fetch_all_prices as _core_fetch_all_prices,
-    fetch_kospi_index as _core_fetch_kospi_index,
     fetch_price_data as _core_fetch_price_data,
     fetch_price_data_raw as _core_fetch_price_data_raw,
     fetch_stock_listing as _core_fetch_stock_listing,
@@ -202,9 +201,16 @@ def fetch_all_prices(
 
 
 def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
-    """KOSPI 지수(KS11) 데이터를 반환한다 (DB 우선 조회)."""
-    return _core_fetch_kospi_index(
-        start, end,
-        load_price=_load_price_from_db,
-        save_price=_save_price_to_db,
-    )
+    """KOSPI 지수(KS11) 데이터를 반환한다 (증분 캐시)."""
+    uncovered = _find_uncovered_ranges("KS11", start, end)
+
+    for r_start, r_end in uncovered:
+        df = _core_fetch_price_data_raw("KS11", r_start, r_end)
+        if df is not None and not df.empty:
+            _save_price_to_db("KS11", df, True)
+        _save_coverage("KS11", r_start, r_end, df)
+
+    df = _load_price_from_db("KS11", start, end)
+    if df is not None and not df.empty:
+        return df
+    raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
