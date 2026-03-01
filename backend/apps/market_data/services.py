@@ -12,6 +12,7 @@ from core.data.fetcher import (
     fetch_all_prices as _core_fetch_all_prices,
     fetch_kospi_index as _core_fetch_kospi_index,
     fetch_price_data as _core_fetch_price_data,
+    fetch_price_data_raw as _core_fetch_price_data_raw,
     fetch_stock_listing as _core_fetch_stock_listing,
 )
 
@@ -126,17 +127,13 @@ def _save_coverage(code: str, start: str, end: str, fetched_df: pd.DataFrame) ->
 
 
 def _load_price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
+    """DB에서 가격 데이터를 로드한다."""
     records = list(
         StockDailyPrice.objects.filter(
             code=code, date__gte=start, date__lte=end,
         ).order_by("date").values("date", "open", "high", "low", "close", "volume")
     )
     if not records:
-        return None
-
-    # end 날짜 근처 데이터가 없으면 불완전 → 네트워크 fetch 유도
-    last_date = str(records[-1]["date"])
-    if last_date < end:
         return None
 
     df = pd.DataFrame(records)
@@ -176,12 +173,19 @@ def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
 
 
 def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
-    """개별 종목의 일별 가격 데이터를 반환한다 (DB 우선 조회)."""
-    return _core_fetch_price_data(
-        code, start, end,
-        load_price=_load_price_from_db,
-        save_price=_save_price_to_db,
-    )
+    """개별 종목의 일별 가격 데이터를 반환한다 (증분 캐시)."""
+    uncovered = _find_uncovered_ranges(code, start, end)
+
+    for r_start, r_end in uncovered:
+        df = _core_fetch_price_data_raw(code, r_start, r_end)
+        if df is not None and not df.empty:
+            _save_price_to_db(code, df, False)
+        _save_coverage(code, r_start, r_end, df)
+
+    df = _load_price_from_db(code, start, end)
+    if df is not None and not df.empty:
+        return df
+    raise ValueError(f"{code} 가격 데이터를 가져올 수 없습니다 ({start}~{end})")
 
 
 def fetch_all_prices(

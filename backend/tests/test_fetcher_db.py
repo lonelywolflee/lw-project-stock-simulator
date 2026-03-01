@@ -64,44 +64,121 @@ class TestFetchStockListingDB:
 
 @pytest.mark.django_db
 class TestFetchPriceDataDB:
-    def test_returns_db_data_when_exists(self):
-        """DB에 데이터가 있으면 DB에서 반환한다."""
-        StockDailyPrice.objects.create(
-            code="005930", date=datetime.date(2024, 1, 2),
-            open=100, high=105, low=99, close=103, volume=1000,
-        )
-        StockDailyPrice.objects.create(
-            code="005930", date=datetime.date(2024, 1, 3),
-            open=103, high=107, low=102, close=106, volume=1200,
-        )
+    def test_returns_db_data_when_fully_covered(self):
+        """전체 커버 시 네트워크 요청 없이 DB에서 반환한다."""
+        for day, close in [(2, 103), (3, 106)]:
+            StockDailyPrice.objects.create(
+                code="005930", date=datetime.date(2024, 1, day),
+                open=100, high=105, low=99, close=close, volume=1000,
+            )
+            PriceFetchCoverage.objects.create(
+                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+            )
 
         df = fetch_price_data("005930", "2024-01-02", "2024-01-03")
 
         assert len(df) == 2
-        assert "Close" in df.columns
         assert df.iloc[0]["Close"] == 103
 
-    def test_fetches_from_network_and_saves(self, mocker):
-        """DB에 없으면 네트워크 fetch 후 DB에 저장한다."""
-        dates = pd.date_range("2024-01-02", periods=2, freq="B")
+    def test_fetches_only_uncovered_range(self, mocker):
+        """캐시된 부분은 건너뛰고 미캐시 구간만 네트워크 fetch한다."""
+        # 01-02 캐시됨
+        StockDailyPrice.objects.create(
+            code="005930", date=datetime.date(2024, 1, 2),
+            open=100, high=105, low=99, close=103, volume=1000,
+        )
+        PriceFetchCoverage.objects.create(
+            code="005930", date=datetime.date(2024, 1, 2), has_data=True,
+        )
+
+        # 01-03~04 미캐시 → 네트워크 fetch
+        dates = pd.to_datetime(["2024-01-03", "2024-01-04"])
+        mock_df = pd.DataFrame({
+            "Open": [103, 105], "High": [107, 109],
+            "Low": [102, 104], "Close": [106, 108],
+            "Volume": [1200, 1100],
+        }, index=dates)
+        mock_raw = mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=mock_df,
+        )
+
+        df = fetch_price_data("005930", "2024-01-02", "2024-01-04")
+
+        assert len(df) == 3
+        assert df.iloc[0]["Close"] == 103  # DB
+        assert df.iloc[1]["Close"] == 106  # 네트워크
+        mock_raw.assert_called_once()
+
+    def test_handles_non_trading_days(self, mocker):
+        """비거래일이 포함된 범위를 정상 처리한다."""
+        dates = pd.to_datetime(["2024-01-02", "2024-01-03"])
         mock_df = pd.DataFrame({
             "Open": [100, 103], "High": [105, 107],
             "Low": [99, 102], "Close": [103, 106],
             "Volume": [1000, 1200],
         }, index=dates)
-        mocker.patch("core.data.fetcher._retry", return_value=mock_df)
+        mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=mock_df,
+        )
+
+        df = fetch_price_data("005930", "2024-01-02", "2024-01-04")
+
+        assert len(df) == 2  # 비거래일 01-04 제외
+        assert PriceFetchCoverage.objects.filter(code="005930").count() == 3
+        assert PriceFetchCoverage.objects.filter(code="005930", has_data=False).count() == 1
+
+    def test_second_call_uses_cache(self, mocker):
+        """두 번째 동일 호출은 네트워크 요청 없이 캐시에서 반환한다."""
+        dates = pd.to_datetime(["2024-01-02", "2024-01-03"])
+        mock_df = pd.DataFrame({
+            "Open": [100, 103], "High": [105, 107],
+            "Low": [99, 102], "Close": [103, 106],
+            "Volume": [1000, 1200],
+        }, index=dates)
+        mock_raw = mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=mock_df,
+        )
+
+        df1 = fetch_price_data("005930", "2024-01-02", "2024-01-03")
+        assert mock_raw.call_count == 1
+
+        df2 = fetch_price_data("005930", "2024-01-02", "2024-01-03")
+        assert mock_raw.call_count == 1  # 추가 호출 없음
+        assert len(df2) == 2
+
+    def test_fetches_from_network_and_saves(self, mocker):
+        """DB에 없으면 네트워크 fetch 후 DB에 저장한다."""
+        dates = pd.to_datetime(["2024-01-02", "2024-01-03"])
+        mock_df = pd.DataFrame({
+            "Open": [100, 103], "High": [105, 107],
+            "Low": [99, 102], "Close": [103, 106],
+            "Volume": [1000, 1200],
+        }, index=dates)
+        mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            return_value=mock_df,
+        )
 
         df = fetch_price_data("005930", "2024-01-02", "2024-01-03")
 
         assert len(df) == 2
         assert StockDailyPrice.objects.filter(code="005930").count() == 2
+        assert PriceFetchCoverage.objects.filter(code="005930").count() == 2
 
     def test_raises_on_network_failure(self, mocker):
         """DB에 없고 네트워크도 실패하면 예외 발생."""
-        mocker.patch("core.data.fetcher._retry", side_effect=Exception("fail"))
+        mocker.patch(
+            "apps.market_data.services._core_fetch_price_data_raw",
+            side_effect=Exception("fail"),
+        )
 
         with pytest.raises(Exception):
             fetch_price_data("005930", "2024-01-02", "2024-01-03")
+
+        assert PriceFetchCoverage.objects.count() == 0
 
 
 @pytest.mark.django_db
