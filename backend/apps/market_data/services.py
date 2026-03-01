@@ -10,8 +10,6 @@ import logging
 import pandas as pd
 
 from core.data.fetcher import (
-    fetch_all_prices as _core_fetch_all_prices,
-    fetch_price_data as _core_fetch_price_data,
     fetch_price_data_raw as _core_fetch_price_data_raw,
     fetch_stock_listing as _core_fetch_stock_listing,
 )
