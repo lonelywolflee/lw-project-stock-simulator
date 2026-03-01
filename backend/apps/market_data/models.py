@@ -51,3 +51,21 @@ class StockDailyPrice(models.Model):
 
     def __str__(self):
         return f"{self.code} {self.date} C={self.close}"
+
+
+class PriceFetchCoverage(models.Model):
+    """가격 데이터 fetch 커버리지 — 일자별 fetch 완료 여부를 추적한다."""
+
+    code = models.CharField(max_length=20)
+    date = models.DateField()
+    has_data = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "market_data_price_fetch_coverage"
+        constraints = [
+            models.UniqueConstraint(fields=["code", "date"], name="unique_price_coverage"),
+        ]
+
+    def __str__(self):
+        status = "data" if self.has_data else "no-data"
+        return f"{self.code} {self.date} ({status})"
