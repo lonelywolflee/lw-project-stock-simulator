@@ -1,7 +1,8 @@
-"""시장 데이터 서비스 — DB 접근 로직 + core fetcher 조합.
+"""시장 데이터 서비스 — 증분 캐시 오케스트레이션.
 
-core/data/fetcher.py의 순수 함수에 DB 콜백을 주입하여
-종목 목록/가격 데이터의 DB 우선 조회 → 네트워크 fetch → DB 저장을 오케스트레이션한다.
+PriceFetchCoverage로 일자별 커버리지를 추적하여,
+미캐시 범위만 네트워크에서 fetch하고 DB에 저장한다.
+종목 목록은 BatchMeta로 하루 1회 배치 관리한다.
 """
 
 import datetime
