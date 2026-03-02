@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0  # seconds
 
+LISTING_RETRIES = 1
+
+LISTING_FALLBACK_MARKETS = {
+    "KOSPI": "KOSPI-DESC",
+    "KOSDAQ": "KOSDAQ-DESC",
+}
+
 
 def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
     """네트워크 요청을 지수 백오프로 재시도한다."""
@@ -29,6 +36,19 @@ def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
             time.sleep(delay)
 
 
+def _fetch_listing_with_fallback(market: str) -> pd.DataFrame:
+    """목록 조회를 시도한다. 실패 시 DESC variant로 fallback."""
+    try:
+        return _retry(fdr.StockListing, market, retries=LISTING_RETRIES)
+    except Exception as e:
+        fallback = LISTING_FALLBACK_MARKETS.get(market)
+        if fallback:
+            logger.warning("종목 목록 %s 실패, %s로 fallback: %s", market, fallback, e)
+            df = _retry(fdr.StockListing, fallback, retries=LISTING_RETRIES)
+            return df[["Code", "Name"]]
+        raise
+
+
 def fetch_stock_listing(
     market: str = "KOSPI",
     *,
@@ -40,8 +60,8 @@ def fetch_stock_listing(
     """상장 종목 목록을 반환한다.
 
     1. is_batch_done()이 True면 load_listing()으로 DB 조회
-    2. 아니면 FinanceDataReader 호출 → save_listing() → mark_batch_done()
-    3. 네트워크 실패 → load_listing() fallback (없으면 예외)
+    2. 아니면 FDR 호출 (KOSPI → KOSPI-DESC fallback) → save_listing() → mark_batch_done()
+    3. 전체 실패 → load_listing() fallback (없으면 예외)
     """
     if is_batch_done and is_batch_done():
         df = load_listing() if load_listing else None
@@ -49,14 +69,14 @@ def fetch_stock_listing(
             return df
 
     try:
-        df = _retry(fdr.StockListing, market)
+        df = _fetch_listing_with_fallback(market)
         if save_listing:
             save_listing(df)
         if mark_batch_done:
             mark_batch_done()
         return df
     except Exception:
-        logger.warning("종목 목록 fetch 실패, fallback 시도")
+        logger.warning("종목 목록 fetch 실패, DB fallback 시도")
         df = load_listing() if load_listing else None
         if df is not None and not df.empty:
             return df
