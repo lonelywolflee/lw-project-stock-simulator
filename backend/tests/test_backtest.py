@@ -103,6 +103,35 @@ class TestRankByCandidatesWithMissingMarcap:
         # A는 실제 시총 5000억 -> B의 volume*close(약 30만)보다 큼
         assert result[0][0] == "A"
 
+    def test_volume_close_respects_current_date(self):
+        """current_date 이후 데이터는 정렬에 반영하지 않는다."""
+        from core.engine.backtest import _rank_buy_candidates
+
+        dates = pd.date_range("2024-01-02", periods=3, freq="B")
+        price_data = {
+            "A": pd.DataFrame({
+                "Open": [100, 100, 100], "High": [100, 100, 100],
+                "Low": [100, 100, 100], "Close": [100, 100, 100],
+                "Volume": [100, 100, 5000],  # 마지막 날 급증
+            }, index=dates),
+            "B": pd.DataFrame({
+                "Open": [100, 100, 100], "High": [100, 100, 100],
+                "Low": [100, 100, 100], "Close": [100, 100, 100],
+                "Volume": [200, 200, 200],
+            }, index=dates),
+        }
+        listing = pd.DataFrame({
+            "Code": ["A", "B"], "Name": ["A", "B"], "Marcap": [0, 0],
+        })
+
+        # current_date=첫째 날 → A:100*100=10000, B:200*100=20000 → B가 먼저
+        candidates = [("A", "A", 100.0), ("B", "B", 100.0)]
+        result = _rank_buy_candidates(
+            candidates, price_data, listing,
+            "market_cap", pd.Timestamp("2024-01-02"), 2,
+        )
+        assert result[0][0] == "B"
+
 
 class TestRunBacktest:
     def test_basic_buy_and_sell(self):
