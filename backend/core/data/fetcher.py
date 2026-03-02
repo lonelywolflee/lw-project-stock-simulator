@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0  # seconds
 
-LISTING_RETRIES = 1
+FALLBACK_RETRIES = 1
 
 LISTING_FALLBACK_MARKETS = {
     "KOSPI": "KOSPI-DESC",
     "KOSDAQ": "KOSDAQ-DESC",
 }
+
+INDEX_SYMBOLS = ["KOSPI", "NAVER:KOSPI"]
 
 
 def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
@@ -29,6 +31,7 @@ def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            logger.warning(args, kwargs)
             if attempt == retries - 1:
                 raise
             delay = RETRY_BASE_DELAY * (2 ** attempt)
@@ -39,12 +42,12 @@ def _retry(func, *args, retries: int = MAX_RETRIES, **kwargs):
 def _fetch_listing_with_fallback(market: str) -> pd.DataFrame:
     """목록 조회를 시도한다. 실패 시 DESC variant로 fallback."""
     try:
-        return _retry(fdr.StockListing, market, retries=LISTING_RETRIES)
+        return _retry(fdr.StockListing, market, retries=FALLBACK_RETRIES)
     except Exception as e:
         fallback = LISTING_FALLBACK_MARKETS.get(market)
         if fallback:
             logger.warning("종목 목록 %s 실패, %s로 fallback: %s", market, fallback, e)
-            df = _retry(fdr.StockListing, fallback, retries=LISTING_RETRIES)
+            df = _retry(fdr.StockListing, fallback, retries=FALLBACK_RETRIES)
             return df[["Code", "Name"]]
         raise
 
@@ -141,32 +144,47 @@ def fetch_all_prices(
     return result
 
 
+def _fetch_index_with_fallback(start: str, end: str) -> pd.DataFrame:
+    """지수 데이터를 fetch한다. 실패 시 fallback 심볼로 재시도."""
+    for i, symbol in enumerate(INDEX_SYMBOLS):
+        try:
+            df = _retry(fdr.DataReader, symbol, start, end, retries=FALLBACK_RETRIES)
+            if df is not None and not df.empty:
+                return df
+        except Exception as e:
+            if i < len(INDEX_SYMBOLS) - 1:
+                logger.warning("지수 %s 실패, %s로 fallback: %s", symbol, INDEX_SYMBOLS[i + 1], e)
+            else:
+                raise
+    return pd.DataFrame()
+
+
 def fetch_kospi_index(
     start: str, end: str,
     *,
     load_price: Callable[[str, str, str], pd.DataFrame | None] | None = None,
     save_price: Callable[[str, pd.DataFrame, bool], None] | None = None,
 ) -> pd.DataFrame:
-    """KOSPI 지수(KS11) 데이터를 반환한다."""
+    """KOSPI 지수 데이터를 반환한다."""
     if load_price:
-        df = load_price("KS11", start, end)
+        df = load_price("KOSPI", start, end)
         if df is not None and not df.empty:
             return df
 
-    df = _retry(fdr.DataReader, "KS11", start, end)
+    df = _fetch_index_with_fallback(start, end)
     if df is not None and not df.empty:
         if save_price:
-            save_price("KS11", df, True)
+            save_price("KOSPI", df, True)
         return df
     raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
 
 
-if __name__ == "__main__":
-    # df = fetch_stock_listing("KOSPI")
-    # print(df)
-    df = fetch_price_data("005930", "2024-01-02", "2024-01-04")
-    print(df)
-    # df = fetch_kospi_index("2024-01-02", "2024-01-04")
-    # print(df)
-    df = fetch_all_prices(["005930", "000660"], "2024-01-02", "2024-01-04")
-    print(df)
+# if __name__ == "__main__":
+#     df = fetch_stock_listing("KOSPI")
+#     print(df)
+#     df = fetch_price_data("NAVER:481850", "2023-01-02", "2025-01-02")
+#     print(df)
+#     df = fetch_kospi_index("2024-01-02", "2024-01-04")
+#     print(df)
+#     df = fetch_all_prices(["005930", "000660"], "2024-01-02", "2024-01-04")
+#     print(df)
