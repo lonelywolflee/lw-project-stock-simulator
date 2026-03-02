@@ -43,9 +43,17 @@ def run(request, params: BacktestParamsSchema):
             }))
             listing = fetch_stock_listing("KOSPI")
             codes = listing["Code"].tolist()
-            event_queue.put(("log", {
-                "message": f"✓ KOSPI {len(codes)}개 종목 로드",
-            }))
+
+            has_marcap = "Marcap" in listing.columns
+            if has_marcap:
+                event_queue.put(("log", {
+                    "message": f"✓ KOSPI {len(codes)}개 종목 로드",
+                }))
+            else:
+                event_queue.put(("log", {
+                    "message": f"⚠ KOSPI 목록 조회 실패로 KOSPI-DESC를 사용합니다. "
+                               f"{len(codes)}개 종목 로드 (실시간 시가총액 미반영)",
+                }))
 
             # ── Phase 2: 주가 데이터 수집 ──
             event_queue.put(("phase", {
@@ -72,6 +80,11 @@ def run(request, params: BacktestParamsSchema):
             }))
 
             # ── Phase 3: 시뮬레이션 실행 ──
+            if not has_marcap and bp.sort_method == "market_cap":
+                event_queue.put(("log", {
+                    "message": "⚠ 시가총액 정보가 없는 종목은 거래대금(거래량×종가) 기준으로 산정합니다.",
+                }))
+
             event_queue.put(("phase", {
                 "phase": 3, "total": 4,
                 "message": "시뮬레이션 실행 중...",
