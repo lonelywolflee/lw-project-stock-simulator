@@ -97,10 +97,12 @@ def _rank_buy_candidates(
             cap = cap_map.get(code, 0) or 0
             if cap > 0:
                 return float(cap)
-            # Marcap 없으면 최신 거래일 volume * close로 대체
+            # Marcap 없으면 current_date 기준 최신 거래일 volume × close로 대체
             if code in price_data and not price_data[code].empty:
-                latest = price_data[code].iloc[-1]
-                return float(latest["Volume"] * latest["Close"])
+                available = price_data[code].loc[:current_date]
+                if not available.empty:
+                    latest = available.iloc[-1]
+                    return float(latest["Volume"] * latest["Close"])
             return 0.0
 
         candidates.sort(key=lambda x: _effective_cap(x[0]), reverse=True)
