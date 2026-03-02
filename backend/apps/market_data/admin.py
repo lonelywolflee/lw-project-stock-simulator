@@ -3,7 +3,7 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from .models import BatchMeta, StockDailyPrice, StockListing
+from .models import BatchMeta, PriceFetchCoverage, StockDailyPrice, StockListing
 
 
 @admin.register(BatchMeta)
@@ -21,6 +21,13 @@ class StockListingAdmin(ModelAdmin):
 
 @admin.register(StockDailyPrice)
 class StockDailyPriceAdmin(ModelAdmin):
-    list_display = ("code", "date", "close", "volume", "is_index")
-    list_filter = ("is_index",)
+    list_display = ("market", "code", "date", "close", "volume", "is_index")
+    list_filter = ("market", "is_index")
+    search_fields = ("code",)
+
+
+@admin.register(PriceFetchCoverage)
+class PriceFetchCoverageAdmin(ModelAdmin):
+    list_display = ("market", "code", "date", "has_data")
+    list_filter = ("market", "has_data")
     search_fields = ("code",)
