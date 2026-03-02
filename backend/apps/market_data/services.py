@@ -11,6 +11,7 @@ import logging
 import pandas as pd
 
 from core.data.fetcher import (
+    _fetch_index_with_fallback as _core_fetch_index_with_fallback,
     fetch_price_data_raw as _core_fetch_price_data_raw,
     fetch_stock_listing as _core_fetch_stock_listing,
 )
@@ -80,7 +81,7 @@ def _mark_listing_batch_done(market: str) -> None:
 # ── 가격 데이터 DB 콜백 ────────────────────────────────────────
 
 
-def _find_uncovered_ranges(code: str, start: str, end: str) -> list[tuple[str, str]]:
+def _find_uncovered_ranges(market: str, code: str, start: str, end: str) -> list[tuple[str, str]]:
     """커버리지 테이블에서 미캐시 연속 날짜 범위를 반환한다."""
     start_date = datetime.date.fromisoformat(start)
     end_date = datetime.date.fromisoformat(end)
@@ -93,7 +94,7 @@ def _find_uncovered_ranges(code: str, start: str, end: str) -> list[tuple[str, s
 
     covered_dates = set(
         PriceFetchCoverage.objects.filter(
-            code=code, date__gte=start_date, date__lte=end_date,
+            market=market, code=code, date__gte=start_date, date__lte=end_date,
         ).values_list("date", flat=True)
     )
 
@@ -113,7 +114,7 @@ def _find_uncovered_ranges(code: str, start: str, end: str) -> list[tuple[str, s
     return ranges
 
 
-def _save_coverage(code: str, start: str, end: str, fetched_df: pd.DataFrame) -> None:
+def _save_coverage(market: str, code: str, start: str, end: str, fetched_df: pd.DataFrame) -> None:
     """fetch한 범위의 모든 날짜에 대해 커버리지를 기록한다."""
     start_date = datetime.date.fromisoformat(start)
     end_date = datetime.date.fromisoformat(end)
@@ -129,18 +130,18 @@ def _save_coverage(code: str, start: str, end: str, fetched_df: pd.DataFrame) ->
     current = start_date
     while current <= end_date:
         objects.append(PriceFetchCoverage(
-            code=code, date=current, has_data=current in data_dates,
+            market=market, code=code, date=current, has_data=current in data_dates,
         ))
         current += datetime.timedelta(days=1)
 
     PriceFetchCoverage.objects.bulk_create(objects, ignore_conflicts=True)
 
 
-def _load_price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
+def _load_price_from_db(market: str, code: str, start: str, end: str) -> pd.DataFrame | None:
     """DB에서 가격 데이터를 로드한다."""
     records = list(
         StockDailyPrice.objects.filter(
-            code=code, date__gte=start, date__lte=end,
+            market=market, code=code, date__gte=start, date__lte=end,
         ).order_by("date").values("date", "open", "high", "low", "close", "volume")
     )
     if not records:
@@ -152,10 +153,11 @@ def _load_price_from_db(code: str, start: str, end: str) -> pd.DataFrame | None:
     return df
 
 
-def _save_price_to_db(code: str, df: pd.DataFrame, is_index: bool = False) -> None:
+def _save_price_to_db(market: str, code: str, df: pd.DataFrame, is_index: bool = False) -> None:
     objects = []
     for date, row in df.iterrows():
         objects.append(StockDailyPrice(
+            market=market,
             code=code,
             date=date.date() if hasattr(date, "date") else date,
             open=row["Open"],
@@ -182,17 +184,17 @@ def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
     )
 
 
-def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
+def fetch_price_data(code: str, start: str, end: str, *, market: str = "KOSPI") -> pd.DataFrame:
     """개별 종목의 일별 가격 데이터를 반환한다 (증분 캐시)."""
-    uncovered = _find_uncovered_ranges(code, start, end)
+    uncovered = _find_uncovered_ranges(market, code, start, end)
 
     for r_start, r_end in uncovered:
         df = _core_fetch_price_data_raw(code, r_start, r_end)
         if df is not None and not df.empty:
-            _save_price_to_db(code, df, False)
-        _save_coverage(code, r_start, r_end, df)
+            _save_price_to_db(market, code, df, False)
+        _save_coverage(market, code, r_start, r_end, df)
 
-    df = _load_price_from_db(code, start, end)
+    df = _load_price_from_db(market, code, start, end)
     if df is not None and not df.empty:
         return df
     raise ValueError(f"{code} 가격 데이터를 가져올 수 없습니다 ({start}~{end})")
@@ -201,12 +203,14 @@ def fetch_price_data(code: str, start: str, end: str) -> pd.DataFrame:
 def fetch_all_prices(
     codes: list[str], start: str, end: str,
     progress_callback=None,
+    *,
+    market: str = "KOSPI",
 ) -> dict[str, pd.DataFrame]:
     """여러 종목의 가격 데이터를 딕셔너리로 반환한다 (증분 캐시)."""
     result: dict[str, pd.DataFrame] = {}
     for i, code in enumerate(codes):
         try:
-            df = fetch_price_data(code, start, end)
+            df = fetch_price_data(code, start, end, market=market)
             if df is not None and not df.empty:
                 result[code] = df
         except Exception as e:
@@ -217,16 +221,18 @@ def fetch_all_prices(
 
 
 def fetch_kospi_index(start: str, end: str) -> pd.DataFrame:
-    """KOSPI 지수(KS11) 데이터를 반환한다 (증분 캐시)."""
-    uncovered = _find_uncovered_ranges("KS11", start, end)
+    """KOSPI 지수 데이터를 반환한다 (증분 캐시)."""
+    market = "KOSPI"
+    code = "KOSPI"
+    uncovered = _find_uncovered_ranges(market, code, start, end)
 
     for r_start, r_end in uncovered:
-        df = _core_fetch_price_data_raw("KS11", r_start, r_end)
+        df = _core_fetch_index_with_fallback(r_start, r_end)
         if df is not None and not df.empty:
-            _save_price_to_db("KS11", df, True)
-        _save_coverage("KS11", r_start, r_end, df)
+            _save_price_to_db(market, code, df, True)
+        _save_coverage(market, code, r_start, r_end, df)
 
-    df = _load_price_from_db("KS11", start, end)
+    df = _load_price_from_db(market, code, start, end)
     if df is not None and not df.empty:
         return df
     raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
