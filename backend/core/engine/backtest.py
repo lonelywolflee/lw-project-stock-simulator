@@ -92,7 +92,18 @@ def _rank_buy_candidates(
             cap_map = dict(zip(listing_df["Code"], listing_df["Marcap"]))
         elif "Code" in listing_df.columns and "MarketCap" in listing_df.columns:
             cap_map = dict(zip(listing_df["Code"], listing_df["MarketCap"]))
-        candidates.sort(key=lambda x: cap_map.get(x[0], 0), reverse=True)
+
+        def _effective_cap(code: str) -> float:
+            cap = cap_map.get(code, 0) or 0
+            if cap > 0:
+                return float(cap)
+            # Marcap 없으면 최신 거래일 volume * close로 대체
+            if code in price_data and not price_data[code].empty:
+                latest = price_data[code].iloc[-1]
+                return float(latest["Volume"] * latest["Close"])
+            return 0.0
+
+        candidates.sort(key=lambda x: _effective_cap(x[0]), reverse=True)
     elif sort_method == "return_rate":
         def get_return(item):
             code = item[0]

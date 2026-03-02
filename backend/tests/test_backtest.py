@@ -27,6 +27,83 @@ def _make_listing(codes: list[str], names: list[str], caps: list[int]) -> pd.Dat
     })
 
 
+@pytest.fixture
+def sample_price_data():
+    """테스트용 가격 데이터."""
+    dates = pd.date_range("2024-01-02", periods=3, freq="B")
+    return {
+        "A": pd.DataFrame({
+            "Open": [100, 101, 102], "High": [105, 106, 107],
+            "Low": [99, 100, 101], "Close": [101, 102, 103],
+            "Volume": [1000, 2000, 3000],
+        }, index=dates),
+        "B": pd.DataFrame({
+            "Open": [200, 201, 202], "High": [205, 206, 207],
+            "Low": [199, 200, 201], "Close": [201, 202, 203],
+            "Volume": [500, 1000, 1500],
+        }, index=dates),
+    }
+
+
+@pytest.fixture
+def sample_listing():
+    """테스트용 종목 목록."""
+    return pd.DataFrame({
+        "Code": ["A", "B"],
+        "Name": ["Stock A", "Stock B"],
+        "Marcap": [1_000_000_000, 2_000_000_000],
+    })
+
+
+class TestRankByCandidatesWithMissingMarcap:
+    def test_uses_volume_times_close_when_marcap_zero(self, sample_price_data, sample_listing):
+        """Marcap이 0이면 volume*close로 대체 정렬한다."""
+        from core.engine.backtest import _rank_buy_candidates
+
+        # listing에서 Marcap을 0으로 설정
+        listing = sample_listing.copy()
+        listing["Marcap"] = [0, 0]
+
+        # B를 먼저 넣어서 정렬 없이는 B가 먼저 나오도록 한다
+        candidates = [
+            ("B", "Stock B", 200.0),
+            ("A", "Stock A", 100.0),
+        ]
+        current_date = pd.Timestamp("2024-01-04")
+
+        result = _rank_buy_candidates(
+            candidates, sample_price_data, listing,
+            "market_cap", current_date, 2,
+        )
+
+        # volume*close가 큰 종목이 먼저
+        # A: volume=3000, close=103 -> 309000
+        # B: volume=1500, close=203 -> 304500
+        assert result[0][0] == "A"
+
+    def test_mixed_marcap_and_fallback(self, sample_price_data, sample_listing):
+        """Marcap이 있는 종목과 없는 종목이 섞인 경우."""
+        from core.engine.backtest import _rank_buy_candidates
+
+        listing = sample_listing.copy()
+        listing.loc[listing["Code"] == "A", "Marcap"] = 500_000_000_000
+        listing.loc[listing["Code"] == "B", "Marcap"] = 0
+
+        candidates = [
+            ("B", "Stock B", 200.0),
+            ("A", "Stock A", 100.0),
+        ]
+        current_date = pd.Timestamp("2024-01-04")
+
+        result = _rank_buy_candidates(
+            candidates, sample_price_data, listing,
+            "market_cap", current_date, 2,
+        )
+
+        # A는 실제 시총 5000억 -> B의 volume*close(약 30만)보다 큼
+        assert result[0][0] == "A"
+
+
 class TestRunBacktest:
     def test_basic_buy_and_sell(self):
         """3일 연속 상승 → 매수, 3일 연속 하락 → 매도 시나리오."""
