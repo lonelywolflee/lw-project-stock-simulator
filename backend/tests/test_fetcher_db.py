@@ -68,11 +68,11 @@ class TestFetchPriceDataDB:
         """전체 커버 시 네트워크 요청 없이 DB에서 반환한다."""
         for day, close in [(2, 103), (3, 106)]:
             StockDailyPrice.objects.create(
-                code="005930", date=datetime.date(2024, 1, day),
+                market="KOSPI", code="005930", date=datetime.date(2024, 1, day),
                 open=100, high=105, low=99, close=close, volume=1000,
             )
             PriceFetchCoverage.objects.create(
-                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+                market="KOSPI", code="005930", date=datetime.date(2024, 1, day), has_data=True,
             )
 
         df = fetch_price_data("005930", "2024-01-02", "2024-01-03")
@@ -84,11 +84,11 @@ class TestFetchPriceDataDB:
         """캐시된 부분은 건너뛰고 미캐시 구간만 네트워크 fetch한다."""
         # 01-02 캐시됨
         StockDailyPrice.objects.create(
-            code="005930", date=datetime.date(2024, 1, 2),
+            market="KOSPI", code="005930", date=datetime.date(2024, 1, 2),
             open=100, high=105, low=99, close=103, volume=1000,
         )
         PriceFetchCoverage.objects.create(
-            code="005930", date=datetime.date(2024, 1, 2), has_data=True,
+            market="KOSPI", code="005930", date=datetime.date(2024, 1, 2), has_data=True,
         )
 
         # 01-03~04 미캐시 → 네트워크 fetch
@@ -186,11 +186,11 @@ class TestFetchKospiIndexDB:
     def test_returns_db_data_when_fully_covered(self):
         """전체 커버 시 DB에서 반환한다."""
         StockDailyPrice.objects.create(
-            code="KS11", date=datetime.date(2024, 1, 2),
+            market="KOSPI", code="KOSPI", date=datetime.date(2024, 1, 2),
             open=2500, high=2520, low=2490, close=2510, volume=0, is_index=True,
         )
         PriceFetchCoverage.objects.create(
-            code="KS11", date=datetime.date(2024, 1, 2), has_data=True,
+            market="KOSPI", code="KOSPI", date=datetime.date(2024, 1, 2), has_data=True,
         )
 
         df = fetch_kospi_index("2024-01-02", "2024-01-02")
@@ -207,7 +207,7 @@ class TestFetchKospiIndexDB:
             "Volume": [0],
         }, index=dates)
         mock_raw = mocker.patch(
-            "apps.market_data.services._core_fetch_price_data_raw",
+            "apps.market_data.services._core_fetch_index_with_fallback",
             return_value=mock_df,
         )
 
@@ -223,11 +223,11 @@ class TestFetchAllPricesDB:
     def test_skips_failed_stock_and_continues(self, mocker):
         """한 종목 실패 시 건너뛰고 나머지 진행."""
         StockDailyPrice.objects.create(
-            code="A", date=datetime.date(2024, 1, 2),
+            market="KOSPI", code="A", date=datetime.date(2024, 1, 2),
             open=100, high=105, low=99, close=103, volume=1000,
         )
         PriceFetchCoverage.objects.create(
-            code="A", date=datetime.date(2024, 1, 2), has_data=True,
+            market="KOSPI", code="A", date=datetime.date(2024, 1, 2), has_data=True,
         )
         # B는 DB에도 없고 네트워크도 실패
         mocker.patch(
@@ -277,40 +277,40 @@ class TestIntegrationFlow:
 class TestFindUncoveredRanges:
     def test_returns_full_range_when_no_coverage(self):
         """커버리지가 없으면 전체 범위를 반환한다."""
-        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-04")
+        result = _find_uncovered_ranges("KOSPI", "005930", "2024-01-02", "2024-01-04")
         assert result == [("2024-01-02", "2024-01-04")]
 
     def test_returns_empty_when_fully_covered(self):
         """전체가 커버되면 빈 리스트를 반환한다."""
         for day in range(2, 5):
             PriceFetchCoverage.objects.create(
-                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+                market="KOSPI", code="005930", date=datetime.date(2024, 1, day), has_data=True,
             )
-        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-04")
+        result = _find_uncovered_ranges("KOSPI", "005930", "2024-01-02", "2024-01-04")
         assert result == []
 
     def test_returns_tail_range_when_partially_covered(self):
         """앞부분만 커버되면 뒷부분만 반환한다."""
         for day in range(2, 5):
             PriceFetchCoverage.objects.create(
-                code="005930", date=datetime.date(2024, 1, day), has_data=True,
+                market="KOSPI", code="005930", date=datetime.date(2024, 1, day), has_data=True,
             )
-        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-06")
+        result = _find_uncovered_ranges("KOSPI", "005930", "2024-01-02", "2024-01-06")
         assert result == [("2024-01-05", "2024-01-06")]
 
     def test_returns_multiple_uncovered_ranges(self):
         """비연속적인 다중 미커버 구간을 반환한다."""
-        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 2), has_data=True)
-        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 3), has_data=True)
-        PriceFetchCoverage.objects.create(code="005930", date=datetime.date(2024, 1, 5), has_data=True)
+        PriceFetchCoverage.objects.create(market="KOSPI", code="005930", date=datetime.date(2024, 1, 2), has_data=True)
+        PriceFetchCoverage.objects.create(market="KOSPI", code="005930", date=datetime.date(2024, 1, 3), has_data=True)
+        PriceFetchCoverage.objects.create(market="KOSPI", code="005930", date=datetime.date(2024, 1, 5), has_data=True)
 
-        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-07")
+        result = _find_uncovered_ranges("KOSPI", "005930", "2024-01-02", "2024-01-07")
         assert result == [("2024-01-04", "2024-01-04"), ("2024-01-06", "2024-01-07")]
 
     def test_ignores_other_codes(self):
         """다른 종목의 커버리지는 무시한다."""
-        PriceFetchCoverage.objects.create(code="000660", date=datetime.date(2024, 1, 2), has_data=True)
-        result = _find_uncovered_ranges("005930", "2024-01-02", "2024-01-02")
+        PriceFetchCoverage.objects.create(market="KOSPI", code="000660", date=datetime.date(2024, 1, 2), has_data=True)
+        result = _find_uncovered_ranges("KOSPI", "005930", "2024-01-02", "2024-01-02")
         assert result == [("2024-01-02", "2024-01-02")]
 
 
@@ -325,7 +325,7 @@ class TestSaveCoverage:
             "Volume": [1000, 1200],
         }, index=dates)
 
-        _save_coverage("005930", "2024-01-02", "2024-01-04", df)
+        _save_coverage("KOSPI", "005930", "2024-01-02", "2024-01-04", df)
 
         coverages = list(
             PriceFetchCoverage.objects.filter(code="005930")
@@ -338,7 +338,7 @@ class TestSaveCoverage:
 
     def test_saves_all_no_data_for_empty_df(self):
         """빈 DataFrame이면 모든 날짜를 비거래일로 기록한다."""
-        _save_coverage("005930", "2024-01-06", "2024-01-07", pd.DataFrame())
+        _save_coverage("KOSPI", "005930", "2024-01-06", "2024-01-07", pd.DataFrame())
 
         coverages = list(
             PriceFetchCoverage.objects.filter(code="005930")
@@ -349,8 +349,8 @@ class TestSaveCoverage:
     def test_ignores_conflicts_on_duplicate(self):
         """중복 저장 시 충돌을 무시한다."""
         PriceFetchCoverage.objects.create(
-            code="005930", date=datetime.date(2024, 1, 2), has_data=True,
+            market="KOSPI", code="005930", date=datetime.date(2024, 1, 2), has_data=True,
         )
-        _save_coverage("005930", "2024-01-02", "2024-01-02", pd.DataFrame())
+        _save_coverage("KOSPI", "005930", "2024-01-02", "2024-01-02", pd.DataFrame())
 
         assert PriceFetchCoverage.objects.filter(code="005930").count() == 1
