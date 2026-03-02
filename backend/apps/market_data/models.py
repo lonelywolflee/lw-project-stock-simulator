@@ -18,17 +18,21 @@ class BatchMeta(models.Model):
 
 
 class StockListing(models.Model):
-    """KOSPI 상장 종목 정보."""
+    """상장 종목 정보."""
 
-    code = models.CharField(max_length=20, unique=True, db_index=True)
+    market = models.CharField(max_length=20, default="KOSPI", db_index=True)
+    code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
     market_cap = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "market_data_stock_listing"
+        constraints = [
+            models.UniqueConstraint(fields=["market", "code"], name="unique_market_code"),
+        ]
 
     def __str__(self):
-        return f"{self.code} {self.name}"
+        return f"[{self.market}] {self.code} {self.name}"
 
 
 class StockDailyPrice(models.Model):

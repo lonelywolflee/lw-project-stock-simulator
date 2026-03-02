@@ -28,8 +28,10 @@ def _is_listing_batch_done(market: str) -> bool:
     return batch is not None and batch.last_fetched_date == datetime.date.today()
 
 
-def _load_listing_from_db() -> pd.DataFrame | None:
-    records = list(StockListing.objects.all().values("code", "name", "market_cap"))
+def _load_listing_from_db(market: str) -> pd.DataFrame | None:
+    records = list(
+        StockListing.objects.filter(market=market).values("code", "name", "market_cap")
+    )
     if not records:
         return None
     return pd.DataFrame({
@@ -39,9 +41,10 @@ def _load_listing_from_db() -> pd.DataFrame | None:
     })
 
 
-def _save_listing_to_db(df: pd.DataFrame) -> None:
+def _save_listing_to_db(market: str, df: pd.DataFrame) -> None:
     code_col = "Code" if "Code" in df.columns else "Symbol"
     cap_col = "Marcap" if "Marcap" in df.columns else "MarketCap"
+    has_cap = cap_col in df.columns
 
     objects = []
     for _, row in df.iterrows():
@@ -49,15 +52,21 @@ def _save_listing_to_db(df: pd.DataFrame) -> None:
         if not code:
             continue
         objects.append(StockListing(
+            market=market,
             code=code,
             name=row.get("Name", ""),
-            market_cap=int(row.get(cap_col, 0)) if row.get(cap_col) else None,
+            market_cap=int(row.get(cap_col, 0)) if has_cap and row.get(cap_col) else None,
         ))
+
+    update_fields = ["name"]
+    if has_cap:
+        update_fields.append("market_cap")
+
     StockListing.objects.bulk_create(
         objects,
         update_conflicts=True,
-        unique_fields=["code"],
-        update_fields=["name", "market_cap"],
+        unique_fields=["market", "code"],
+        update_fields=update_fields,
     )
 
 
@@ -167,8 +176,8 @@ def fetch_stock_listing(market: str = "KOSPI") -> pd.DataFrame:
     return _core_fetch_stock_listing(
         market,
         is_batch_done=lambda: _is_listing_batch_done(market),
-        load_listing=_load_listing_from_db,
-        save_listing=_save_listing_to_db,
+        load_listing=lambda: _load_listing_from_db(market),
+        save_listing=lambda df: _save_listing_to_db(market, df),
         mark_batch_done=lambda: _mark_listing_batch_done(market),
     )
 

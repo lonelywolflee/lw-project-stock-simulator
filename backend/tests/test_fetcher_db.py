@@ -20,8 +20,8 @@ from apps.market_data.services import (
 class TestFetchStockListingDB:
     def test_returns_db_data_when_batch_is_today(self):
         """오늘 배치 완료 시 DB 데이터를 반환한다."""
-        StockListing.objects.create(code="005930", name="삼성전자", market_cap=500_000_000_000)
-        StockListing.objects.create(code="000660", name="SK하이닉스", market_cap=100_000_000_000)
+        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", market_cap=500_000_000_000)
+        StockListing.objects.create(market="KOSPI", code="000660", name="SK하이닉스", market_cap=100_000_000_000)
         BatchMeta.objects.create(job_name="kospi_listing", last_fetched_date=datetime.date.today())
 
         df = fetch_stock_listing("KOSPI")
@@ -46,7 +46,7 @@ class TestFetchStockListingDB:
 
     def test_uses_db_fallback_on_network_error(self, mocker):
         """네트워크 실패 시 기존 DB 데이터를 반환한다."""
-        StockListing.objects.create(code="005930", name="삼성전자", market_cap=500_000_000_000)
+        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", market_cap=500_000_000_000)
         mocker.patch("core.data.fetcher._retry", side_effect=Exception("network error"))
 
         df = fetch_stock_listing("KOSPI")

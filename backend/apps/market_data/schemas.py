@@ -4,6 +4,7 @@ from ninja import Schema
 
 
 class StockSchema(Schema):
+    market: str
     code: str
     name: str
     market_cap: int | None = None
