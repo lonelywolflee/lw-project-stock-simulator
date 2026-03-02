@@ -36,7 +36,7 @@ class TestFetchStockListingDB:
         mock_df = pd.DataFrame({
             "Code": ["005930"], "Name": ["삼성전자"], "Marcap": [500_000_000_000],
         })
-        mocker.patch("core.data.fetcher._retry", return_value=mock_df)
+        mocker.patch("core.data.fetcher._fetch_listing_with_fallback", return_value=mock_df)
 
         df = fetch_stock_listing("KOSPI")
 
@@ -47,7 +47,7 @@ class TestFetchStockListingDB:
     def test_uses_db_fallback_on_network_error(self, mocker):
         """네트워크 실패 시 기존 DB 데이터를 반환한다."""
         StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", market_cap=500_000_000_000)
-        mocker.patch("core.data.fetcher._retry", side_effect=Exception("network error"))
+        mocker.patch("core.data.fetcher._fetch_listing_with_fallback", side_effect=Exception("network error"))
 
         df = fetch_stock_listing("KOSPI")
 
@@ -56,7 +56,7 @@ class TestFetchStockListingDB:
 
     def test_raises_when_no_db_and_network_fails(self, mocker):
         """DB도 없고 네트워크도 실패하면 예외 발생."""
-        mocker.patch("core.data.fetcher._retry", side_effect=Exception("network error"))
+        mocker.patch("core.data.fetcher._fetch_listing_with_fallback", side_effect=Exception("network error"))
 
         with pytest.raises(Exception):
             fetch_stock_listing("KOSPI")
@@ -256,7 +256,7 @@ class TestIntegrationFlow:
             "Close": [70500, 71500, 72500],
             "Volume": [10000, 12000, 11000],
         }, index=dates)
-        mocker.patch("core.data.fetcher._retry", side_effect=[listing_df])
+        mocker.patch("core.data.fetcher._fetch_listing_with_fallback", side_effect=[listing_df])
         mocker.patch(
             "apps.market_data.services._core_fetch_price_data_raw",
             return_value=price_df,
