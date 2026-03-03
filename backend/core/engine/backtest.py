@@ -1,5 +1,6 @@
 """백테스팅 코어 엔진 - 일별 루프 기반 시뮬레이션."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -79,6 +80,7 @@ def _rank_buy_candidates(
     sort_method: str,
     current_date: pd.Timestamp,
     n_rise: int,
+    resolve_shares: Callable[[str], int | None] | None = None,
 ) -> list[tuple[str, str, float]]:
     """매수 후보를 정렬한다.
 
@@ -87,21 +89,21 @@ def _rank_buy_candidates(
         sort_method: "market_cap" 또는 "return_rate"
     """
     if sort_method == "market_cap" and listing_df is not None:
-        cap_map = {}
-        if "Code" in listing_df.columns and "Marcap" in listing_df.columns:
-            cap_map = dict(zip(listing_df["Code"], listing_df["Marcap"]))
-        elif "Code" in listing_df.columns and "MarketCap" in listing_df.columns:
-            cap_map = dict(zip(listing_df["Code"], listing_df["MarketCap"]))
+        shares_map = {}
+        if "Code" in listing_df.columns and "Stocks" in listing_df.columns:
+            shares_map = dict(zip(listing_df["Code"], listing_df["Stocks"]))
 
         def _effective_cap(code: str) -> float:
-            cap = cap_map.get(code, 0) or 0
-            if cap > 0:
-                return float(cap)
-            # Marcap 없으면 current_date 기준 최신 거래일 volume × close로 대체
+            shares = shares_map.get(code, 0) or 0
+            if not shares and resolve_shares:
+                shares = resolve_shares(code) or 0
             if code in price_data and not price_data[code].empty:
                 available = price_data[code].loc[:current_date]
                 if not available.empty:
                     latest = available.iloc[-1]
+                    if shares > 0:
+                        return float(shares * latest["Close"])
+                    # 발행주식수 없으면 volume × close로 대체
                     return float(latest["Volume"] * latest["Close"])
             return 0.0
 
@@ -159,6 +161,7 @@ def run_backtest(
     listing_df: pd.DataFrame | None = None,
     kospi_df: pd.DataFrame | None = None,
     event_callback=None,
+    resolve_shares: Callable[[str], int | None] | None = None,
 ) -> BacktestResult:
     """백테스트를 실행한다.
 
@@ -303,6 +306,7 @@ def run_backtest(
         buy_candidates = _rank_buy_candidates(
             buy_candidates, price_data, listing_df,
             params.sort_method, date, params.n_rise_days,
+            resolve_shares=resolve_shares,
         )
 
         for code, name, price in buy_candidates:
