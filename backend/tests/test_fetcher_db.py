@@ -20,8 +20,8 @@ from apps.market_data.services import (
 class TestFetchStockListingDB:
     def test_returns_db_data_when_batch_is_today(self):
         """오늘 배치 완료 시 DB 데이터를 반환한다."""
-        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", market_cap=500_000_000_000)
-        StockListing.objects.create(market="KOSPI", code="000660", name="SK하이닉스", market_cap=100_000_000_000)
+        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", listing_shares=5_969_782_550)
+        StockListing.objects.create(market="KOSPI", code="000660", name="SK하이닉스", listing_shares=728_002_365)
         BatchMeta.objects.create(job_name="kospi_listing", last_fetched_date=datetime.date.today())
 
         df = fetch_stock_listing("KOSPI")
@@ -29,12 +29,12 @@ class TestFetchStockListingDB:
         assert len(df) == 2
         assert "Code" in df.columns
         assert "Name" in df.columns
-        assert "Marcap" in df.columns
+        assert "Stocks" in df.columns
 
     def test_fetches_from_network_when_no_batch(self, mocker):
         """배치 기록이 없으면 네트워크에서 fetch하고 DB에 저장한다."""
         mock_df = pd.DataFrame({
-            "Code": ["005930"], "Name": ["삼성전자"], "Marcap": [500_000_000_000],
+            "Code": ["005930"], "Name": ["삼성전자"], "Stocks": [5_969_782_550],
         })
         mocker.patch("core.data.fetcher._fetch_listing_with_fallback", return_value=mock_df)
 
@@ -46,7 +46,7 @@ class TestFetchStockListingDB:
 
     def test_uses_db_fallback_on_network_error(self, mocker):
         """네트워크 실패 시 기존 DB 데이터를 반환한다."""
-        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", market_cap=500_000_000_000)
+        StockListing.objects.create(market="KOSPI", code="005930", name="삼성전자", listing_shares=5_969_782_550)
         mocker.patch("core.data.fetcher._fetch_listing_with_fallback", side_effect=Exception("network error"))
 
         df = fetch_stock_listing("KOSPI")
@@ -246,7 +246,7 @@ class TestIntegrationFlow:
     def test_listing_then_price_flow(self, mocker):
         """종목 목록 → 가격 조회 전체 흐름."""
         listing_df = pd.DataFrame({
-            "Code": ["005930"], "Name": ["삼성전자"], "Marcap": [500_000_000_000],
+            "Code": ["005930"], "Name": ["삼성전자"], "Stocks": [5_969_782_550],
         })
         dates = pd.date_range("2024-01-02", periods=3, freq="B")
         price_df = pd.DataFrame({
@@ -354,3 +354,89 @@ class TestSaveCoverage:
         _save_coverage("KOSPI", "005930", "2024-01-02", "2024-01-02", pd.DataFrame())
 
         assert PriceFetchCoverage.objects.filter(code="005930").count() == 1
+
+
+@pytest.mark.django_db
+class TestResolveListingShares:
+    def test_returns_cached_value_if_updated_today(self):
+        """오늘 업데이트된 listing_shares는 네이버 호출 없이 반환한다."""
+        from apps.market_data.services import resolve_listing_shares
+
+        StockListing.objects.create(
+            market="KOSPI", code="005930", name="삼성전자",
+            listing_shares=5_969_782_550,
+            listing_shares_updated_at=datetime.date.today(),
+        )
+
+        result = resolve_listing_shares("KOSPI", "005930")
+        assert result == 5_969_782_550
+
+    def test_fetches_from_naver_when_no_cache(self, mocker):
+        """캐시 미스 시 네이버에서 가져와 DB에 저장한다."""
+        from apps.market_data.services import resolve_listing_shares
+
+        StockListing.objects.create(
+            market="KOSPI", code="005930", name="삼성전자",
+            listing_shares=None, listing_shares_updated_at=None,
+        )
+        mocker.patch(
+            "apps.market_data.services._fetch_listing_shares_from_naver",
+            return_value=5_969_782_550,
+        )
+
+        result = resolve_listing_shares("KOSPI", "005930")
+
+        assert result == 5_969_782_550
+        obj = StockListing.objects.get(code="005930")
+        assert obj.listing_shares == 5_969_782_550
+        assert obj.listing_shares_updated_at == datetime.date.today()
+
+    def test_returns_none_when_naver_fails(self, mocker):
+        """네이버도 실패하면 None을 반환한다."""
+        from apps.market_data.services import resolve_listing_shares
+
+        StockListing.objects.create(
+            market="KOSPI", code="005930", name="삼성전자",
+            listing_shares=None, listing_shares_updated_at=None,
+        )
+        mocker.patch(
+            "apps.market_data.services._fetch_listing_shares_from_naver",
+            return_value=None,
+        )
+
+        result = resolve_listing_shares("KOSPI", "005930")
+        assert result is None
+
+    def test_skips_naver_when_updated_today_even_if_none(self):
+        """오늘 업데이트했지만 shares가 None이면 None 반환 (재호출 안 함)."""
+        from apps.market_data.services import resolve_listing_shares
+
+        StockListing.objects.create(
+            market="KOSPI", code="005930", name="삼성전자",
+            listing_shares=None,
+            listing_shares_updated_at=datetime.date.today(),
+        )
+
+        result = resolve_listing_shares("KOSPI", "005930")
+        assert result is None
+
+    def test_refetches_when_updated_yesterday(self, mocker):
+        """어제 업데이트된 경우 네이버에서 다시 가져온다."""
+        from apps.market_data.services import resolve_listing_shares
+
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        StockListing.objects.create(
+            market="KOSPI", code="005930", name="삼성전자",
+            listing_shares=5_000_000_000,
+            listing_shares_updated_at=yesterday,
+        )
+        mocker.patch(
+            "apps.market_data.services._fetch_listing_shares_from_naver",
+            return_value=5_969_782_550,
+        )
+
+        result = resolve_listing_shares("KOSPI", "005930")
+
+        assert result == 5_969_782_550
+        obj = StockListing.objects.get(code="005930")
+        assert obj.listing_shares == 5_969_782_550
