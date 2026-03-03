@@ -12,6 +12,7 @@ import pandas as pd
 
 from core.data.fetcher import (
     _fetch_index_with_fallback as _core_fetch_index_with_fallback,
+    fetch_listing_shares_from_naver as _fetch_listing_shares_from_naver,
     fetch_price_data_raw as _core_fetch_price_data_raw,
     fetch_stock_listing as _core_fetch_stock_listing,
 )
@@ -31,21 +32,21 @@ def _is_listing_batch_done(market: str) -> bool:
 
 def _load_listing_from_db(market: str) -> pd.DataFrame | None:
     records = list(
-        StockListing.objects.filter(market=market).values("code", "name", "market_cap")
+        StockListing.objects.filter(market=market).values("code", "name", "listing_shares")
     )
     if not records:
         return None
     return pd.DataFrame({
         "Code": [r["code"] for r in records],
         "Name": [r["name"] for r in records],
-        "Marcap": [r["market_cap"] for r in records],
+        "Stocks": [r["listing_shares"] for r in records],
     })
 
 
 def _save_listing_to_db(market: str, df: pd.DataFrame) -> None:
     code_col = "Code" if "Code" in df.columns else "Symbol"
-    cap_col = "Marcap" if "Marcap" in df.columns else "MarketCap"
-    has_cap = cap_col in df.columns
+    shares_col = "Stocks" if "Stocks" in df.columns else "ListingShares"
+    has_shares = shares_col in df.columns
 
     objects = []
     for _, row in df.iterrows():
@@ -56,12 +57,13 @@ def _save_listing_to_db(market: str, df: pd.DataFrame) -> None:
             market=market,
             code=code,
             name=row.get("Name", ""),
-            market_cap=int(row.get(cap_col, 0)) if has_cap and row.get(cap_col) else None,
+            listing_shares=int(row.get(shares_col, 0)) if has_shares and row.get(shares_col) else None,
+            listing_shares_updated_at=datetime.date.today() if has_shares and row.get(shares_col) else None,
         ))
 
     update_fields = ["name"]
-    if has_cap:
-        update_fields.append("market_cap")
+    if has_shares:
+        update_fields.extend(["listing_shares", "listing_shares_updated_at"])
 
     StockListing.objects.bulk_create(
         objects,
@@ -76,6 +78,23 @@ def _mark_listing_batch_done(market: str) -> None:
         job_name=f"{market.lower()}_listing",
         defaults={"last_fetched_date": datetime.date.today()},
     )
+
+
+def resolve_listing_shares(market: str, code: str) -> int | None:
+    """DB 캐시를 확인하고, 미스 시 네이버에서 상장주식수를 가져온다."""
+    obj = StockListing.objects.filter(market=market, code=code).first()
+    if not obj:
+        return None
+
+    if obj.listing_shares_updated_at == datetime.date.today():
+        return obj.listing_shares
+
+    shares = _fetch_listing_shares_from_naver(code)
+    if shares is not None:
+        obj.listing_shares = shares
+    obj.listing_shares_updated_at = datetime.date.today()
+    obj.save(update_fields=["listing_shares", "listing_shares_updated_at"])
+    return shares
 
 
 # ── 가격 데이터 DB 콜백 ────────────────────────────────────────
