@@ -22,6 +22,6 @@ def list_stocks(request, market: str, limit: int = 100):
             "market": market.upper(),
             "code": row.get("Code", ""),
             "name": row.get("Name", ""),
-            "market_cap": int(row.get("Marcap", 0)) if row.get("Marcap") else None,
+            "listing_shares": int(row.get("Stocks", 0)) if row.get("Stocks") else None,
         })
     return records

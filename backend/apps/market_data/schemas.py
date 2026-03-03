@@ -7,4 +7,4 @@ class StockSchema(Schema):
     market: str
     code: str
     name: str
-    market_cap: int | None = None
+    listing_shares: int | None = None
