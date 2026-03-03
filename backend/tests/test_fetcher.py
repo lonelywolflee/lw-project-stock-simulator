@@ -57,12 +57,12 @@ class TestFetchStockListingFallback:
     def test_uses_kospi_on_success(self, mocker):
         """KOSPI 성공 시 그대로 반환한다."""
         mock_df = pd.DataFrame({
-            "Code": ["005930"], "Name": ["삼성전자"], "Marcap": [500_000_000_000],
+            "Code": ["005930"], "Name": ["삼성전자"], "Stocks": [5_969_782_550],
         })
         mock_fdr = mocker.patch("core.data.fetcher.fdr.StockListing", return_value=mock_df)
 
         df = fetch_stock_listing("KOSPI")
-        assert "Marcap" in df.columns
+        assert "Stocks" in df.columns
         assert len(df) == 1
         mock_fdr.assert_called_once_with("KOSPI")
 
@@ -80,7 +80,7 @@ class TestFetchStockListingFallback:
         df = fetch_stock_listing("KOSPI")
         assert "Code" in df.columns
         assert "Name" in df.columns
-        assert "Marcap" not in df.columns
+        assert "Stocks" not in df.columns
         assert len(df) == 1
 
     def test_raises_when_both_fail(self, mocker):
@@ -104,3 +104,45 @@ class TestFetchStockListingFallback:
         with pytest.raises(Exception):
             fetch_stock_listing("KOSPI")
         mock_sleep.assert_not_called()  # retry=1이면 sleep 없음
+
+
+class TestFetchListingSharesFromNaver:
+    def test_parses_listing_shares(self, mocker):
+        """네이버 증권 HTML에서 상장주식수를 파싱한다."""
+        html = '''
+        <div id="tab_con1" class="tab_con1" style="display:block">
+        <table>
+        <tr><th scope="row">상장주식수</th><td><em>5,969,782,550</em></td></tr>
+        </table>
+        </div>
+        '''
+        mock_resp = mocker.Mock()
+        mock_resp.text = html
+        mock_resp.raise_for_status = mocker.Mock()
+        mocker.patch("core.data.fetcher.requests.get", return_value=mock_resp)
+
+        from core.data.fetcher import fetch_listing_shares_from_naver
+
+        result = fetch_listing_shares_from_naver("005930")
+        assert result == 5_969_782_550
+
+    def test_returns_none_on_network_error(self, mocker):
+        """네트워크 오류 시 None을 반환한다."""
+        mocker.patch("core.data.fetcher.requests.get", side_effect=Exception("timeout"))
+
+        from core.data.fetcher import fetch_listing_shares_from_naver
+
+        result = fetch_listing_shares_from_naver("005930")
+        assert result is None
+
+    def test_returns_none_on_parse_failure(self, mocker):
+        """파싱 실패 시 None을 반환한다."""
+        mock_resp = mocker.Mock()
+        mock_resp.text = "<html><body>no data</body></html>"
+        mock_resp.raise_for_status = mocker.Mock()
+        mocker.patch("core.data.fetcher.requests.get", return_value=mock_resp)
+
+        from core.data.fetcher import fetch_listing_shares_from_naver
+
+        result = fetch_listing_shares_from_naver("005930")
+        assert result is None
