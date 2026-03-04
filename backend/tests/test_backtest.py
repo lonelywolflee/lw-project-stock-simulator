@@ -18,12 +18,12 @@ def _make_price_df(prices: list[float], start: str = "2024-01-01") -> pd.DataFra
     }, index=dates)
 
 
-def _make_listing(codes: list[str], names: list[str], caps: list[int]) -> pd.DataFrame:
+def _make_listing(codes: list[str], names: list[str], shares: list[int]) -> pd.DataFrame:
     """테스트용 종목 목록 DataFrame을 생성한다."""
     return pd.DataFrame({
         "Code": codes,
         "Name": names,
-        "Marcap": caps,
+        "Stocks": shares,
     })
 
 
@@ -51,18 +51,18 @@ def sample_listing():
     return pd.DataFrame({
         "Code": ["A", "B"],
         "Name": ["Stock A", "Stock B"],
-        "Marcap": [1_000_000_000, 2_000_000_000],
+        "Stocks": [1_000_000, 2_000_000],
     })
 
 
-class TestRankByCandidatesWithMissingMarcap:
-    def test_uses_volume_times_close_when_marcap_zero(self, sample_price_data, sample_listing):
-        """Marcap이 0이면 volume*close로 대체 정렬한다."""
+class TestRankByCandidatesWithMissingStocks:
+    def test_uses_volume_times_close_when_stocks_zero(self, sample_price_data, sample_listing):
+        """Stocks가 0이면 volume*close로 대체 정렬한다."""
         from core.engine.backtest import _rank_buy_candidates
 
-        # listing에서 Marcap을 0으로 설정
+        # listing에서 Stocks를 0으로 설정
         listing = sample_listing.copy()
-        listing["Marcap"] = [0, 0]
+        listing["Stocks"] = [0, 0]
 
         # B를 먼저 넣어서 정렬 없이는 B가 먼저 나오도록 한다
         candidates = [
@@ -81,13 +81,13 @@ class TestRankByCandidatesWithMissingMarcap:
         # B: volume=1500, close=203 -> 304500
         assert result[0][0] == "A"
 
-    def test_mixed_marcap_and_fallback(self, sample_price_data, sample_listing):
-        """Marcap이 있는 종목과 없는 종목이 섞인 경우."""
+    def test_mixed_stocks_and_fallback(self, sample_price_data, sample_listing):
+        """Stocks가 있는 종목과 없는 종목이 섞인 경우."""
         from core.engine.backtest import _rank_buy_candidates
 
         listing = sample_listing.copy()
-        listing.loc[listing["Code"] == "A", "Marcap"] = 500_000_000_000
-        listing.loc[listing["Code"] == "B", "Marcap"] = 0
+        listing.loc[listing["Code"] == "A", "Stocks"] = 5_000_000_000
+        listing.loc[listing["Code"] == "B", "Stocks"] = 0
 
         candidates = [
             ("B", "Stock B", 200.0),
@@ -100,7 +100,7 @@ class TestRankByCandidatesWithMissingMarcap:
             "market_cap", current_date, 2,
         )
 
-        # A는 실제 시총 5000억 -> B의 volume*close(약 30만)보다 큼
+        # A: 50억주 × 103원 = 약 5150억 → B의 volume*close(약 30만)보다 큼
         assert result[0][0] == "A"
 
     def test_volume_close_respects_current_date(self):
@@ -121,7 +121,7 @@ class TestRankByCandidatesWithMissingMarcap:
             }, index=dates),
         }
         listing = pd.DataFrame({
-            "Code": ["A", "B"], "Name": ["A", "B"], "Marcap": [0, 0],
+            "Code": ["A", "B"], "Name": ["A", "B"], "Stocks": [0, 0],
         })
 
         # current_date=첫째 날 → A:100*100=10000, B:200*100=20000 → B가 먼저
@@ -132,6 +132,59 @@ class TestRankByCandidatesWithMissingMarcap:
         )
         assert result[0][0] == "B"
 
+    def test_calls_resolve_shares_when_stocks_zero(self, sample_price_data, sample_listing):
+        """Stocks가 0이면 resolve_shares 콜백을 호출한다."""
+        from core.engine.backtest import _rank_buy_candidates
+
+        listing = sample_listing.copy()
+        listing["Stocks"] = [0, 0]
+
+        resolve_calls = []
+
+        def mock_resolve(code):
+            resolve_calls.append(code)
+            return {"A": 10_000_000, "B": 1_000_000}.get(code)
+
+        candidates = [
+            ("B", "Stock B", 200.0),
+            ("A", "Stock A", 100.0),
+        ]
+        current_date = pd.Timestamp("2024-01-04")
+
+        result = _rank_buy_candidates(
+            candidates, sample_price_data, listing,
+            "market_cap", current_date, 2,
+            resolve_shares=mock_resolve,
+        )
+
+        # A: 10_000_000 × 103 = 1,030,000,000
+        # B: 1_000_000 × 203 = 203,000,000
+        assert result[0][0] == "A"
+        assert set(resolve_calls) == {"A", "B"}
+
+    def test_falls_back_to_volume_when_resolve_returns_none(self, sample_price_data, sample_listing):
+        """resolve_shares도 None이면 volume*close fallback."""
+        from core.engine.backtest import _rank_buy_candidates
+
+        listing = sample_listing.copy()
+        listing["Stocks"] = [0, 0]
+
+        candidates = [
+            ("B", "Stock B", 200.0),
+            ("A", "Stock A", 100.0),
+        ]
+        current_date = pd.Timestamp("2024-01-04")
+
+        result = _rank_buy_candidates(
+            candidates, sample_price_data, listing,
+            "market_cap", current_date, 2,
+            resolve_shares=lambda code: None,
+        )
+
+        # resolve 실패 → volume*close fallback
+        # A: 3000*103=309000, B: 1500*203=304500
+        assert result[0][0] == "A"
+
 
 class TestRunBacktest:
     def test_basic_buy_and_sell(self):
@@ -139,7 +192,7 @@ class TestRunBacktest:
         # 3일 상승 후 3일 하락
         prices = [100, 101, 102, 103, 102, 101, 100, 99, 105]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -195,7 +248,7 @@ class TestRunBacktest:
         # 3일 상승 후 급락(-10%)
         prices = [100, 101, 102, 103, 92]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -226,7 +279,7 @@ class TestRunBacktest:
         }
         listing = _make_listing(
             ["A", "B"], ["소형주", "대형주"],
-            [100_000_000, 10_000_000_000],
+            [100_000, 10_000_000],
         )
 
         params = BacktestParams(
@@ -256,7 +309,7 @@ class TestRunBacktest:
         # 상승 → 하락 → 회복 패턴
         prices = [100, 101, 102, 103, 95, 90, 85, 90, 95]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -281,7 +334,7 @@ class TestRunBacktest:
         """event_callback이 progress와 trade 이벤트를 보고해야 한다."""
         prices = [100, 101, 102, 103, 102, 101, 100]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -322,7 +375,7 @@ class TestMultiStageSell:
         # 3일 상승 → 3일 하락 (1차), 총 7일 데이터
         prices = [100, 101, 102, 103, 102, 101, 100]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -351,7 +404,7 @@ class TestMultiStageSell:
         # 3일 상승 → 5일 연속 하락 (1차+2차)
         prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -380,7 +433,7 @@ class TestMultiStageSell:
         # 매수 수량 = floor(100000/103) = 970주, 평가액 = 970*100 = 97,000 < 2,500,000
         prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=1_100_000,
@@ -411,7 +464,7 @@ class TestMultiStageSell:
         # threshold(max_buy_amount*25/100=1,250,000)를 초과하도록 함
         prices = [100, 101, 102, 103, 102, 101, 100, 101, 100, 99, 98]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -438,7 +491,7 @@ class TestMultiStageSell:
         # 3일 상승 → 3일 하락(1차) → 급락(-10%)
         prices = [100, 101, 102, 103, 102, 101, 100, 88]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,
@@ -467,7 +520,7 @@ class TestMultiStageSell:
         # 3일 상승 → 5일 연속 하락
         prices = [100, 101, 102, 103, 102, 101, 100, 99, 98]
         price_data = {"A": _make_price_df(prices)}
-        listing = _make_listing(["A"], ["테스트"], [1_000_000_000])
+        listing = _make_listing(["A"], ["테스트"], [10_000_000])
 
         params = BacktestParams(
             initial_cash=10_000_000,

@@ -23,7 +23,8 @@ class StockListing(models.Model):
     market = models.CharField(max_length=20, db_index=True)
     code = models.CharField(max_length=20)
     name = models.CharField(max_length=100)
-    market_cap = models.BigIntegerField(null=True, blank=True)
+    listing_shares = models.BigIntegerField(null=True, blank=True)
+    listing_shares_updated_at = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = "market_data_stock_listing"

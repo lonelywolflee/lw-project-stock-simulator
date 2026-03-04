@@ -4,11 +4,13 @@
 """
 
 import logging
+import re
 import time
 from collections.abc import Callable
 
 import FinanceDataReader as fdr
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -179,9 +181,32 @@ def fetch_kospi_index(
     raise ValueError(f"KOSPI 지수 데이터를 가져올 수 없습니다 ({start}~{end})")
 
 
-# if __name__ == "__main__":
-#     df = fetch_stock_listing("KOSPI")
-#     print(df)
+def fetch_listing_shares_from_naver(code: str) -> int | None:
+    """네이버 증권에서 상장주식수를 스크래핑한다."""
+    url = f"https://finance.naver.com/item/main.naver?code={code}"
+    try:
+        r = requests.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0",
+        })
+        r.raise_for_status()
+    except Exception:
+        logger.warning("네이버 증권 %s 요청 실패", code)
+        return None
+
+    match = re.search(
+        r"상장주식수</th>\s*<td[^>]*><em>([\d,]+)</em>",
+        r.text,
+    )
+    if not match:
+        logger.warning("네이버 증권 %s 상장주식수 파싱 실패", code)
+        return None
+
+    return int(match.group(1).replace(",", ""))
+
+
+if __name__ == "__main__":
+    df = fetch_stock_listing("KOSPI")
+    print(df)
 #     df = fetch_price_data("NAVER:481850", "2023-01-02", "2025-01-02")
 #     print(df)
 #     df = fetch_kospi_index("2024-01-02", "2024-01-04")

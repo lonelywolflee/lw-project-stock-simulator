@@ -14,7 +14,7 @@ class BatchMetaAdmin(ModelAdmin):
 
 @admin.register(StockListing)
 class StockListingAdmin(ModelAdmin):
-    list_display = ("market", "code", "name", "market_cap")
+    list_display = ("market", "code", "name", "listing_shares", "listing_shares_updated_at")
     list_filter = ("market",)
     search_fields = ("code", "name")
 
